@@ -7,15 +7,12 @@ import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
 import 'package:dhyana/core/utils/validators.dart';
-import 'package:dhyana/core/utils/helpers.dart'; // For showing snackbar/dialogs
-import 'package:dhyana/providers/auth_provider.dart'; // For authService
+import 'package:dhyana/core/utils/helpers.dart';
+import 'package:dhyana/providers/auth_provider.dart';
 import 'package:dhyana/widgets/common/custom_text_field.dart';
 import 'package:dhyana/widgets/common/custom_button.dart';
-import 'package:dhyana/widgets/common/loading_widget.dart'; // For loading indicator
+import 'package:dhyana/widgets/common/loading_widget.dart';
 
-/// A screen for user login, allowing users to authenticate with their email and password.
-/// It integrates with `AuthService` via Riverpod to handle authentication logic
-/// and provides navigation to signup and forgot password screens.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -37,74 +34,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// Handles the login process when the login button is pressed.
-  /// It validates the form, calls the authentication service, and
-  /// handles success or error states.
   Future<void> _handleLogin() async {
     if (_formKey.currentState?.validate() ?? false) {
-      setState(() {
-        _isLoading = true;
-      });
-
+      setState(() => _isLoading = true);
       try {
         final authService = ref.read(authServiceProvider);
-        await authService.login(_emailController.text.trim(), _passwordController.text.trim());
+        await authService.login(
+          _emailController.text.trim(),
+          _passwordController.text.trim(),
+        );
 
-        // On successful login, navigate to the home screen.
-        // The authStateProvider redirect in App widget will also handle this.
         if (mounted) {
           context.go('/home');
           Helpers.showSnackbar(context, 'Logged in successfully!');
         }
       } catch (e) {
-        debugPrint('Login Error: $e');
         if (mounted) {
           Helpers.showMessageDialog(
             context,
             title: 'Login Failed',
             message: e.toString().contains('firebase_auth')
-                ? 'Invalid email or password. Please try again.' // Generic message for common Firebase errors
+                ? 'Invalid email or password. Please try again.'
                 : 'An unexpected error occurred. Please try again later.',
           );
         }
       } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final authService = ref.read(authServiceProvider);
+      final userCredential = await authService.signInWithGoogle();
+
+      if (userCredential != null && mounted) {
+        context.go('/home');
+        Helpers.showSnackbar(context, 'Signed in with Google successfully!');
+      }
+    } catch (e) {
+      if (mounted) {
+        Helpers.showMessageDialog(
+          context,
+          title: 'Google Sign-In Failed',
+          message: 'An unexpected error occurred. Please try again later.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'Login',
-          style: AppTextStyles.headlineSmall.copyWith(
-            color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-          ),
+          style: AppTextStyles.titleLarge,
         ),
-        backgroundColor: Colors.transparent, // Ensure AppBar is transparent for background
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      extendBodyBehindAppBar: true, // Extends body behind the app bar
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background gradient or image (for Glass Morphism effect)
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
                 colors: isDarkMode
                     ? [AppColors.backgroundDark, const Color(0xFF212121)]
                     : [AppColors.backgroundLight, const Color(0xFFEEEEEE)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
@@ -118,8 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     Text(
                       'Welcome Back!',
-                      style: AppTextStyles.displaySmall.copyWith(
-                        color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
+                      style: AppTextStyles.headlineMedium.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -129,10 +134,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       hintText: 'Email',
                       keyboardType: TextInputType.emailAddress,
                       validator: Validators.isValidEmail,
-                      prefixIcon: Icon(
-                        Icons.email_outlined,
-                        color: isDarkMode ? AppColors.textDark.withOpacity(0.7) : AppColors.textLight.withOpacity(0.7),
-                      ),
+                      prefixIcon: Icon(Icons.email_outlined,
+                          color: (isDarkMode
+                              ? AppColors.textDark
+                              : AppColors.textLight)
+                              .withOpacity(0.7)),
                     ),
                     const SizedBox(height: AppConstants.paddingMedium),
                     CustomTextField(
@@ -140,18 +146,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       hintText: 'Password',
                       obscureText: _obscurePassword,
                       validator: Validators.isValidPassword,
-                      prefixIcon: Icon(
-                        Icons.lock_outline,
-                        color: isDarkMode ? AppColors.textDark.withOpacity(0.7) : AppColors.textLight.withOpacity(0.7),
-                      ),
+                      prefixIcon: Icon(Icons.lock_outline,
+                          color: (isDarkMode
+                              ? AppColors.textDark
+                              : AppColors.textLight)
+                              .withOpacity(0.7)),
                       suffixIcon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: isDarkMode ? AppColors.textDark.withOpacity(0.7) : AppColors.textLight.withOpacity(0.7),
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: (isDarkMode
+                            ? AppColors.textDark
+                            : AppColors.textLight)
+                            .withOpacity(0.7),
                       ),
                       onSuffixIconPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
+                        setState(() => _obscurePassword = !_obscurePassword);
                       },
                     ),
                     const SizedBox(height: AppConstants.paddingSmall),
@@ -159,20 +169,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: CustomButton(
                         text: 'Forgot Password?',
-                        onPressed: () {
-                          context.go('/forgot-password');
-                        },
+                        onPressed: () => context.go('/forgot-password'),
                         type: ButtonType.text,
+                        isFullWidth: false,
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingLarge),
                     _isLoading
                         ? const LoadingWidget()
-                        : CustomButton(
-                      text: 'Login',
-                      onPressed: _handleLogin,
-                      type: ButtonType.primary,
-                      icon: Icons.login,
+                        : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CustomButton(
+                          text: 'Login',
+                          onPressed: _handleLogin,
+                          type: ButtonType.primary,
+                          icon: Icons.login,
+                        ),
+                        const SizedBox(height: AppConstants.paddingMedium),
+                        // This is the new, isolated Google Sign-In button
+                        OutlinedButton.icon(
+                          icon: Image.asset(
+                            'assets/icons/google_logo.png',
+                            height: 20.0,
+                            width: 20.0,
+                          ),
+                          onPressed: _handleGoogleSignIn,
+                          label: Text(
+                            'Sign in with Google',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: isDarkMode ? AppColors.textDark : AppColors.textLight,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppConstants.paddingMedium,
+                              horizontal: AppConstants.paddingLarge,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                            ),
+                            side: BorderSide(
+                              color: isDarkMode ? AppColors.textDark : AppColors.textLight,
+                              width: 1.2,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppConstants.paddingMedium),
                     Row(
@@ -180,16 +224,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         Text(
                           'Don\'t have an account?',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                          ),
+                          style: AppTextStyles.bodyMedium,
                         ),
                         CustomButton(
                           text: 'Sign Up',
-                          onPressed: () {
-                            context.go('/signup');
-                          },
+                          onPressed: () => context.go('/signup'),
                           type: ButtonType.text,
+                          isFullWidth: false,
                         ),
                       ],
                     ),

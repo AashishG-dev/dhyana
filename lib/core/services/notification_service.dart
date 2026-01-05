@@ -1,179 +1,204 @@
 // lib/core/services/notification_service.dart
-import 'dart:io';
-import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 
 class NotificationService {
-  // Singleton pattern to ensure only one instance of this service exists.
+  // Singleton pattern to ensure only one instance of the service
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
   FlutterLocalNotificationsPlugin();
 
-  /// Initializes the notification plugin. Call this once in main.dart.
-  Future<void> init() async {
-    tz.initializeTimeZones();
+  Future<void> initialize() async {
+    // Initialize timezone data
+    tz_data.initializeTimeZones();
+    // Set the local location (e.g., for India)
+    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
+    // Android Initialization Settings
+    const AndroidInitializationSettings androidInitializationSettings =
     AndroidInitializationSettings('@mipmap/ic_launcher');
+    // fallback to launcher icon
 
-    final DarwinInitializationSettings initializationSettingsDarwin =
-    DarwinInitializationSettings(
-      // Request default permissions on iOS/macOS.
-      // The user will be prompted on the first notification schedule/show if not already granted.
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+    // iOS/macOS Initialization Settings
+    const DarwinInitializationSettings darwinInitializationSettings =
+    DarwinInitializationSettings();
+
+    final InitializationSettings initializationSettings =
+    InitializationSettings(
+      android: androidInitializationSettings,
+      iOS: darwinInitializationSettings,
+      macOS: darwinInitializationSettings,
     );
 
-    final InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsDarwin,
-      macOS: initializationSettingsDarwin,
-    );
-
-    await _flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        debugPrint('Notification tapped with payload: ${response.payload}');
-      },
-    );
-    debugPrint('NotificationService initialized.');
+    await _notificationsPlugin.initialize(initializationSettings);
   }
 
-  /// Requests permissions for Android and iOS.
-  /// Returns true if permissions are granted.
-  Future<bool> requestPermissions() async {
-    bool? result = false;
-    if (Platform.isIOS || Platform.isMacOS) {
-      result = await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-    } else if (Platform.isAndroid) {
-      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-      _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      result = await androidImplementation?.requestNotificationsPermission();
-    }
-    return result ?? false;
-  }
+  /// Request notification permissions for Android 13+ and iOS.
+  Future<void> requestPermissions() async {
+    // Android 13+ permissions
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
 
-  /// Schedules a daily meditation reminder.
-  Future<void> scheduleMeditationReminder(
-      DateTime time, String title, String body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      AppConstants.meditationReminderChannelId,
-      AppConstants.meditationReminderChannelName,
-      channelDescription: AppConstants.meditationReminderChannelDescription,
-      importance: Importance.max,
-      priority: Priority.high,
+    // iOS permissions
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+      alert: true,
+      badge: true,
+      sound: true,
     );
-    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: darwinDetails,
-    );
-
-    final tz.TZDateTime scheduledDate = _nextInstanceOfTime(time);
-
-    await _flutterLocalNotificationsPlugin.zonedSchedule(
-      0, // Unique ID for this notification type
-      title,
-      body,
-      scheduledDate,
-      platformDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'meditation_reminder',
-    );
-    debugPrint('Meditation reminder scheduled for: $scheduledDate');
   }
 
   /// Shows an immediate notification.
-  Future<void> showMindfulMoment(String title, String body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      AppConstants.mindfulMomentChannelId,
-      AppConstants.mindfulMomentChannelName,
-      channelDescription: AppConstants.mindfulMomentChannelDescription,
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'dhyana_immediate_channel',
+      'Immediate Notifications',
+      channelDescription: 'Channel for important immediate notifications.',
       importance: Importance.max,
       priority: Priority.high,
     );
-    const NotificationDetails platformDetails =
-    NotificationDetails(android: androidDetails);
-    await _flutterLocalNotificationsPlugin.show(
-      1, // Unique ID for this type of notification
+
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.show(id, title, body, notificationDetails);
+  }
+
+  /// ✅ NEW METHOD: Schedules a one-time notification at a specific DateTime
+  Future<void> scheduleOneTimeNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    String? payload,
+  }) async {
+    final location = tz.local;
+    final scheduledDate = tz.TZDateTime.from(scheduledTime, location);
+
+    const androidDetails = AndroidNotificationDetails(
+      'dhyana_scheduled_channel',
+      'Scheduled Notifications',
+      channelDescription: 'Channel for scheduled one-time notifications.',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.zonedSchedule(
+      id,
       title,
       body,
-      platformDetails,
-      payload: 'mindful_moment',
+      scheduledDate,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: payload,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
     );
+
+    debugPrint("⏰ One-time notification scheduled: $title for $scheduledDate");
   }
 
-  /// Cancels a specific notification by its ID.
-  Future<void> cancelNotification(int id) async {
-    await _flutterLocalNotificationsPlugin.cancel(id);
-    debugPrint('Notification with ID $id cancelled.');
-  }
+  /// Schedules a daily notification at a specific time.
+  Future<void> scheduleDailyNotification({
+    required int id,
+    required String title,
+    required String body,
+    required TimeOfDay time,
+    String? payload,
+  }) async {
+    final location = tz.local;
+    final now = tz.TZDateTime.now(location);
 
-  /// Retrieves a list of all pending scheduled notifications.
-  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
-  }
-
-  /// Checks if notification permissions have been granted.
-  Future<bool> arePermissionsGranted() async {
-    if (Platform.isAndroid) {
-      final bool? granted = await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-          ?.areNotificationsEnabled();
-      return granted ?? false;
-    } else if (Platform.isIOS) {
-      // For iOS, the recommended approach is to simply request permissions.
-      // The OS handles showing the prompt only once. Subsequent calls return the existing status.
-      final bool? granted = await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      return granted ?? false;
-    }
-    return false;
-  }
-
-  /// Calculates the next instance of a given time for scheduling.
-  tz.TZDateTime _nextInstanceOfTime(DateTime time) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduledDate = tz.TZDateTime(
-      tz.local,
+      location,
       now.year,
       now.month,
       now.day,
       time.hour,
       time.minute,
     );
+
+    // If the scheduled time has already passed today, schedule it for tomorrow
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
-    return scheduledDate;
+
+    const androidDetails = AndroidNotificationDetails(
+      'dhyana_daily_reminder_channel',
+      'Daily Reminders',
+      channelDescription: 'Channel for daily learning reminders.',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledDate,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents:
+      DateTimeComponents.time, // repeat daily at same time
+      payload: payload,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    debugPrint("📅 Daily notification scheduled for: $scheduledDate with payload: $payload");
   }
+
+  /// Cancels all scheduled notifications.
+  Future<void> cancelAllNotifications() async {
+    await _notificationsPlugin.cancelAll();
+    debugPrint("🗑️ All notifications cancelled");
+  }
+
+  /// Cancel specific notification by ID
+  Future<void> cancelNotification(int id) async {
+    await _notificationsPlugin.cancel(id);
+    debugPrint("🗑️ Cancelled notification with ID: $id");
+  }
+
+  /// Get all pending notifications (useful for debugging)
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _notificationsPlugin.pendingNotificationRequests();
+  }
+
+  /// Check if notifications are enabled
+  Future<bool> areNotificationsEnabled() async {
+    if (Theme.of(NavigatorKey.currentContext!).platform == TargetPlatform.android) {
+      final androidImplementation = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      return await androidImplementation?.areNotificationsEnabled() ?? false;
+    }
+    return true; // iOS doesn't have a direct way to check this
+  }
+}
+
+// Helper class for getting context (you might need to adjust this based on your app structure)
+class NavigatorKey {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static BuildContext? get currentContext => navigatorKey.currentContext;
 }

@@ -1,4 +1,5 @@
 // lib/models/breathing_technique_model.dart
+import 'package:flutter/material.dart';
 
 /// Represents a single step in a breathing cycle (e.g., Inhale, Hold).
 class BreathingStep {
@@ -22,6 +23,12 @@ class BreathingTechnique {
   final String longDescription;  // For the detail screen
   final List<String> steps;      // The step-by-step instructions for the user
   final List<BreathingStep> cycle; // The data used by the animator
+  final IconData icon;
+  final String tag;
+  final Color tagColor;
+  final String durationText;
+  final bool isLocked;
+  final String imageUrl;
 
   const BreathingTechnique({
     required this.id,
@@ -30,5 +37,11 @@ class BreathingTechnique {
     required this.longDescription,
     required this.steps,
     required this.cycle,
+    required this.icon,
+    required this.tag,
+    required this.tagColor,
+    required this.durationText,
+    this.isLocked = false,
+    required this.imageUrl,
   });
 }

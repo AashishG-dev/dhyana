@@ -1,6 +1,5 @@
 // lib/core/models/notification_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp conversion (if storing in Firestore)
-import 'package:flutter/foundation.dart'; // For debugPrint
 
 /// Defines the data structure for a notification within the Dhyana application.
 /// This model can represent both scheduled local notifications and potentially

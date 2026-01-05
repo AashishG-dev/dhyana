@@ -1,22 +1,16 @@
 // lib/screens/stress_relief/exercise_demo_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:video_player/video_player.dart'; // For video playback
+import 'package:video_player/video_player.dart';
 
 import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/providers/stress_relief_provider.dart'; // For stressReliefExerciseByIdProvider
-import 'package:dhyana/models/stress_relief_exercise_model.dart';
+import 'package:dhyana/providers/stress_relief_provider.dart';
 import 'package:dhyana/widgets/common/app_bar_widget.dart';
 import 'package:dhyana/widgets/common/loading_widget.dart';
 import 'package:dhyana/widgets/common/custom_button.dart';
 
-
-/// A screen that displays the details and a demo of a specific stress relief exercise.
-/// It fetches exercise metadata and plays a video/GIF demonstration.
-/// Integrates with `stressReliefExerciseByIdProvider` to get exercise data.
 class ExerciseDemoScreen extends ConsumerStatefulWidget {
   final String? exerciseId;
 
@@ -36,7 +30,6 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
     _loadExerciseAndVideo();
   }
 
-  /// Loads the exercise details and initializes the video player if a demo URL exists.
   Future<void> _loadExerciseAndVideo() async {
     if (widget.exerciseId == null) {
       debugPrint('Exercise ID is null. Cannot load exercise.');
@@ -48,13 +41,12 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
       if (exercise != null && exercise.demoMediaUrl != null && exercise.demoMediaUrl!.isNotEmpty) {
         _videoController = VideoPlayerController.networkUrl(Uri.parse(exercise.demoMediaUrl!));
         _initializeVideoPlayerFuture = _videoController?.initialize().then((_) {
-          // Ensure the first frame is shown and play the video.
           setState(() {});
-          _videoController?.setLooping(true); // Loop the demo video
+          _videoController?.setLooping(true);
           _videoController?.play();
         }).catchError((error) {
           debugPrint('Error initializing video player: $error');
-          _videoController = null; // Clear controller on error
+          _videoController = null;
           _initializeVideoPlayerFuture = null;
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -76,13 +68,11 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final exerciseAsync = ref.watch(stressReliefExerciseByIdProvider(widget.exerciseId ?? ''));
 
     return Scaffold(
-      appBar: CustomAppBar(
+      appBar: const CustomAppBar(
         title: 'Exercise Demo',
         showBackButton: true,
       ),
@@ -102,9 +92,7 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
               return Center(
                 child: Text(
                   'Exercise not found.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                  ),
+                  style: AppTextStyles.bodyMedium,
                 ),
               );
             }
@@ -116,9 +104,7 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
                 children: [
                   Text(
                     exercise.title,
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                    ),
+                    style: AppTextStyles.headlineLarge,
                   ),
                   const SizedBox(height: AppConstants.paddingSmall),
                   Text(
@@ -128,8 +114,6 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
                     ),
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
-
-                  // Video/GIF Demo Player
                   if (exercise.demoMediaUrl != null && exercise.demoMediaUrl!.isNotEmpty)
                     FutureBuilder(
                       future: _initializeVideoPlayerFuture,
@@ -149,13 +133,11 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.videocam_off, size: 50, color: isDarkMode ? AppColors.textDark.withOpacity(0.5) : AppColors.textLight.withOpacity(0.5)), // Changed icon
+                                    Icon(Icons.videocam_off, size: 50, color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.5)),
                                     const SizedBox(height: AppConstants.paddingSmall),
                                     Text(
                                       'Failed to load video demo.',
-                                      style: AppTextStyles.bodyMedium.copyWith(
-                                        color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
-                                      ),
+                                      style: AppTextStyles.bodyMedium,
                                     ),
                                   ],
                                 ),
@@ -171,7 +153,7 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.error_outline, size: 50, color: AppColors.errorColor),
+                                  const Icon(Icons.error_outline, size: 50, color: AppColors.errorColor),
                                   const SizedBox(height: AppConstants.paddingSmall),
                                   Text(
                                     'Error loading video: ${snapshot.error}',
@@ -202,36 +184,25 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
                       child: Center(
                         child: Text(
                           'No demo available for this exercise.',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
-                          ),
+                          style: AppTextStyles.bodyMedium,
                         ),
                       ),
                     ),
                   const SizedBox(height: AppConstants.paddingLarge),
-
                   Text(
                     'Instructions:',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                    ),
+                    style: AppTextStyles.titleLarge,
                   ),
                   const SizedBox(height: AppConstants.paddingSmall),
                   Text(
-                    exercise.description, // Use description as instructions
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                    ),
+                    exercise.description,
+                    style: AppTextStyles.bodyMedium,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge * 2),
-
                   Center(
                     child: CustomButton(
                       text: 'Practice Now',
                       onPressed: () {
-                        // Implement logic to start practicing the exercise,
-                        // e.g., navigate to a guided practice screen or timer.
-                        // For now, just show a snackbar.
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Starting ${exercise.title} practice!')),
                         );
@@ -247,7 +218,7 @@ class _ExerciseDemoScreenState extends ConsumerState<ExerciseDemoScreen> {
           loading: () => const LoadingWidget(message: 'Loading exercise details...'),
           error: (e, st) => Center(
             child: Text('Error loading exercise: $e',
-                style: TextStyle(color: AppColors.errorColor)),
+                style: const TextStyle(color: AppColors.errorColor)),
           ),
         ),
       ),

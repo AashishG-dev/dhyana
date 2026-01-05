@@ -16,6 +16,9 @@ dependencies:
   firebase_auth: ^5.1.1
   cloud_firestore: ^5.0.2
 
+  # Google Sign-in
+  google_sign_in: ^6.2.1
+
   # State Management
   flutter_riverpod: ^2.5.1
 
@@ -27,28 +30,61 @@ dependencies:
   intl: ^0.19.0
   flutter_markdown: ^0.7.3
   fl_chart: ^0.68.0
+  lottie: ^3.1.2
+  google_fonts: ^6.2.1
+  percent_indicator: ^4.2.3
+  cached_network_image: ^3.3.1
+  permission_handler: ^12.0.1
+  device_info_plus: ^9.1.2
+  path_provider: ^2.1.3
+  image_picker: ^1.2.0
 
   # Audio & Video
   audioplayers: ^6.0.0
   video_player: ^2.8.6
+  just_audio: ^0.9.36
+  flutter_tts: ^3.8.3
+  flutter_downloader: ^1.11.0
+  youtube_player_flutter: ^9.1.2
 
-  # Local Storage & Environment
+  # Networking & Caching
+  http: ^1.2.1
+  flutter_cache_manager: ^3.3.1
+
+  # Local Storage
   shared_preferences: ^2.2.3
 
-  # Notifications
-  flutter_local_notifications: ^17.2.1
+  # Notifications - Updated to latest working versions
+  flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
 
-  # Networking
-  http: ^1.2.1
+  # Other
+  url_launcher: ^6.3.2
+  webview_flutter: ^4.13.0
+  confetti: ^0.8.0
+  flutter_svg: ^2.2.0
+  smooth_page_indicator: ^1.2.1
+  file_picker: ^10.3.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icons/logo.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
-
-  # Asset Directories
+  assets:
+    - assets/animations/
+    - assets/images/
+    - assets/icons/
+    - assets/breathing/

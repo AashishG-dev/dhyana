@@ -1,208 +1,504 @@
 // lib/screens/home/home_screen.dart
+import 'package:dhyana/core/utils/gamification_utils.dart';
+import 'package:dhyana/models/progress_data_model.dart';
+import 'package:dhyana/models/quote_model.dart';
+import 'package:dhyana/models/recommendation_model.dart';
+import 'package:dhyana/models/user_model.dart';
+import 'package:dhyana/providers/article_provider.dart';
+import 'package:dhyana/providers/progress_provider.dart';
+import 'package:dhyana/providers/recommendation_provider.dart';
+import 'package:dhyana/widgets/common/profile_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:dhyana/core/constants/app_colors.dart';
+import 'package:lottie/lottie.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
-import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/providers/auth_provider.dart'; // For authStateProvider
-import 'package:dhyana/providers/user_profile_provider.dart'; // For currentUserProfileProvider
-import 'package:dhyana/providers/progress_provider.dart'; // For userProgressDataProvider
-import 'package:dhyana/providers/meditation_provider.dart'; // For meditationsProvider
-import 'package:dhyana/providers/article_provider.dart'; // For articlesProvider
-import 'package:dhyana/models/user_model.dart';
-import 'package:dhyana/models/progress_data_model.dart';
-import 'package:dhyana/models/meditation_model.dart';
-import 'package:dhyana/models/article_model.dart';
-import 'package:dhyana/widgets/common/app_bar_widget.dart';
-import 'package:dhyana/widgets/common/bottom_nav_bar.dart';
+import 'package:dhyana/providers/auth_provider.dart';
 import 'package:dhyana/widgets/common/loading_widget.dart';
-import 'package:dhyana/widgets/progress_indicators/streak_indicator.dart';
-import 'package:dhyana/widgets/progress_indicators/progress_chart_widget.dart';
+import 'package:percent_indicator/linear_percent_indicator.dart';
+import 'package:dhyana/core/utils/helpers.dart';
+import 'package:dhyana/widgets/common/bottom_nav_bar.dart';
+import 'package:dhyana/widgets/common/mini_music_player.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:dhyana/providers/music_provider.dart';
 
-class HomeScreen extends ConsumerWidget {
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
-    final authUser = ref.watch(authStateProvider);
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _waveController;
+  late final AnimationController _catController;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 10));
+    _catController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 8));
+    _waveController.repeat();
+    _catController.repeat();
+  }
+
+  @override
+  void dispose() {
+    _waveController.dispose();
+    _catController.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _onWillPop() async {
+    final confirm = await Helpers.showConfirmationDialog(
+      context,
+      title: 'Exit App',
+      message: 'Are you sure you want to leave?',
+      confirmText: 'Exit',
+      cancelText: 'Stay',
+    );
+    return confirm ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userProfileAsync = ref.watch(currentUserProfileProvider);
+    final musicPlayerState = ref.watch(musicPlayerProvider);
+    final shouldShowMiniPlayer = musicPlayerState.currentTrack != null &&
+        (musicPlayerState.playerState == PlayerState.playing ||
+            musicPlayerState.playerState == PlayerState.paused);
 
-    return Scaffold(
-      appBar: CustomAppBar(
-        title: 'Dhyana',
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.settings_outlined,
-              color: isDarkMode ? AppColors.textDark : AppColors.textLight,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) return;
+        final bool shouldPop = await _onWillPop();
+        if (shouldPop) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        body: userProfileAsync.when(
+          data: (userModel) {
+            return _buildContent(context, ref, userModel);
+          },
+          loading: () => const LoadingWidget(message: 'Loading your space...'),
+          error: (e, st) =>
+              Center(child: Text('Error loading profile: $e')),
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (shouldShowMiniPlayer) const MiniMusicPlayer(),
+            const CustomBottomNavBar(currentIndex: 0),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(
+      BuildContext context, WidgetRef ref, UserModel? userModel) {
+    final quoteAsync = ref.watch(quoteOfTheDayProvider);
+    final recommendationsAsync = ref.watch(recommendationProvider);
+
+    return Column(
+      children: [
+        _buildHeader(context, userModel),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              _buildQuoteCard(context, quoteAsync),
+              const SizedBox(height: 24),
+              if (userModel != null) ...[
+                _buildUserSpecificContent(context, ref, userModel),
+                const SizedBox(height: 24),
+              ],
+              recommendationsAsync.when(
+                data: (recommendations) => recommendations.isNotEmpty
+                    ? _buildRecommendations(context, recommendations)
+                    : const SizedBox.shrink(),
+                loading: () => const LoadingWidget(),
+                error: (e, st) => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 24),
+              _buildFeatureGrid(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, UserModel? user) {
+    final theme = Theme.of(context);
+    final isGuest = user == null;
+    final userName = user?.name ?? 'Guest';
+
+    return SizedBox(
+      height: 220,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Lottie.asset(
+              'assets/animations/Circles.json',
+              fit: BoxFit.cover,
+              controller: _waveController,
             ),
-            onPressed: () {
-              context.go('/settings');
-            },
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.menu),
+                    onSelected: (value) {
+                      if (value == 'offline') {
+                        context.push('/offline-content');
+                      } else if (value == 'feedback') {
+                        context.push('/feedback');
+                      } else if (value == 'notifications') {
+                        context.push('/notification-settings');
+                      }
+                    },
+                    itemBuilder: (BuildContext context) =>
+                    <PopupMenuEntry<String>>[
+                      const PopupMenuItem<String>(
+                        value: 'notifications',
+                        child: ListTile(
+                          leading: Icon(Icons.notifications_outlined),
+                          title: Text('Notification Settings'),
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'offline',
+                        child: ListTile(
+                          leading: Icon(Icons.download_for_offline_outlined),
+                          title: Text('Offline Content'),
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'feedback',
+                        child: ListTile(
+                          leading: Icon(Icons.feedback_outlined),
+                          title: Text('Send Feedback'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Dhyana',
+                    style: AppTextStyles.titleLarge
+                        .copyWith(color: Colors.indigoAccent),
+                  ),
+                  const ProfileAvatar(),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 24,
+            left: 16,
+            right: 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 110,
+                  width: 110,
+                  child: Lottie.asset(
+                    'assets/animations/cat_header.json',
+                    controller: _catController,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (isGuest)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0, vertical: 6.0),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16.0),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Hello, Guest!',
+                                style: AppTextStyles.headlineLarge.copyWith(
+                                  color: Colors.blueGrey,
+                                  fontSize: 24.0,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.person,
+                                  size: 24, color: Colors.white),
+                            ],
+                          ),
+                        )
+                      else
+                        RichText(
+                          text: TextSpan(
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                            children: [
+                              const TextSpan(text: 'Hello, '),
+                              TextSpan(
+                                text: '${userName.split(' ')[0]}!',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigoAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Ready to find your calm today?',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          color:
+                          theme.textTheme.bodyLarge?.color?.withAlpha(150),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDarkMode
-                ? [AppColors.backgroundDark, const Color(0xFF2C2C2C)]
-                : [AppColors.backgroundLight, const Color(0xFFF0F0F0)],
+    );
+  }
+
+  Widget _buildUserSpecificContent(
+      BuildContext context, WidgetRef ref, UserModel userModel) {
+    final progressDataAsync =
+    ref.watch(userProgressDataProvider(userModel.id!));
+    return progressDataAsync.when(
+      data: (progressData) {
+        final levelProgress = GamificationUtils.getUserLevelProgress(
+            userModel, progressData ?? ProgressDataModel(userId: userModel.id!));
+        return GestureDetector(
+          onTap: () => context.push('/levels'),
+          child: _buildLevelProgressCard(context, levelProgress),
+        );
+      },
+      loading: () => const SizedBox(height: 150, child: LoadingWidget()),
+      error: (e, st) => Card(
+          child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text('Could not load progress: $e'))),
+    );
+  }
+
+  Widget _buildRecommendations(
+      BuildContext context, List<Recommendation> recommendations) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('For You', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8.0),
+        SizedBox(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: recommendations.length,
+            itemBuilder: (context, index) {
+              final recommendation = recommendations[index];
+              return SizedBox(
+                width: 200,
+                child: Card(
+                  child: InkWell(
+                    onTap: () => context.push(recommendation.route),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(recommendation.icon,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(height: 8.0),
+                          Text(recommendation.title,
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4.0),
+                          Expanded(
+                            child: Text(
+                              recommendation.description,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-        child: authUser.when(
-          data: (user) {
-            if (user == null) {
-              return const Center(child: Text('Not logged in.'));
+      ],
+    );
+  }
+
+  Widget _buildQuoteCard(
+      BuildContext context, AsyncValue<QuoteModel?> quoteAsync) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Card(
+      color: isDarkMode
+          ? const Color(0xFF1E2A3A)
+          : theme.colorScheme.primary.withAlpha(25),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: quoteAsync.when(
+          data: (quote) {
+            if (quote == null) {
+              return const Text('Could not load quote today.');
             }
-
-            return userProfileAsync.when(
-              data: (userModel) {
-                if (userModel == null) {
-                  return const LoadingWidget(message: 'Setting up your profile...');
-                }
-
-                final progressDataAsync = ref.watch(userProgressDataProvider(userModel.id!));
-                final meditationsAsync = ref.watch(meditationsProvider);
-                final articlesAsync = ref.watch(articlesProvider);
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome, ${userModel.name.split(' ')[0]}!',
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.paddingLarge),
-
-                      // --- Meditation Streak & Progress Chart ---
-                      // ... (This part remains the same)
-
-                      // --- Recommended Meditations ---
-                      Text(
-                        'Recommended Meditations',
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.paddingMedium),
-                      meditationsAsync.when(
-                        // ✅ FIX: The data is now a Map<String, List<MeditationModel>>
-                        data: (groupedMeditations) {
-                          // Flatten the map's values into a single list of meditations.
-                          final allMeditations = groupedMeditations.values.expand((list) => list).toList();
-
-                          if (allMeditations.isEmpty) {
-                            return const Text('No meditations available.');
-                          }
-
-                          return SizedBox(
-                            height: 180,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: allMeditations.length > 5 ? 5 : allMeditations.length,
-                              itemBuilder: (context, index) {
-                                // Now we can safely access items from the flattened list.
-                                final meditation = allMeditations[index];
-                                return GestureDetector(
-                                  onTap: () {
-                                    // Navigate to the new detail screen
-                                    context.go('/meditation-detail/${meditation.id}');
-                                  },
-                                  child: Card(
-                                    margin: const EdgeInsets.only(right: AppConstants.marginSmall),
-                                    child: SizedBox(
-                                      width: 150,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(AppConstants.paddingSmall),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Container(
-                                              height: 80,
-                                              width: double.infinity,
-                                              decoration: BoxDecoration(
-                                                color: isDarkMode ? AppColors.glassBorderDark : AppColors.glassBorderLight,
-                                                borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
-                                                image: meditation.imageUrl != null && meditation.imageUrl!.isNotEmpty
-                                                    ? DecorationImage(
-                                                  image: NetworkImage(meditation.imageUrl!),
-                                                  fit: BoxFit.cover,
-                                                )
-                                                    : null,
-                                              ),
-                                              child: (meditation.imageUrl == null || meditation.imageUrl!.isEmpty)
-                                                  ? Center(child: Icon(Icons.self_improvement, size: 40, color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.5)))
-                                                  : null,
-                                            ),
-                                            const SizedBox(height: AppConstants.paddingSmall),
-                                            Text(
-                                              meditation.title,
-                                              style: AppTextStyles.titleSmall,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              '${meditation.durationMinutes} min',
-                                              style: AppTextStyles.labelSmall.copyWith(
-                                                color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                        loading: () => const LoadingWidget(),
-                        error: (e, st) => Text('Error: $e', style: TextStyle(color: AppColors.errorColor)),
-                      ),
-                      const SizedBox(height: AppConstants.paddingLarge),
-
-                      // --- Latest Articles ---
-                      // ... (This part remains the same)
-                    ],
-                  ),
-                );
-              },
-              loading: () => const LoadingWidget(message: 'Loading profile...'),
-              error: (e, st) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Failed to load your profile.', style: TextStyle(color: AppColors.errorColor)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => ref.invalidate(currentUserProfileProvider),
-                        child: const Text('Retry'),
-                      )
-                    ],
-                  ),
-                );
-              },
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.format_quote,
+                        color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text('Quote of the Day', style: AppTextStyles.titleLarge),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('"${quote.text}"', style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('- ${quote.author}',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(fontStyle: FontStyle.italic)),
+                ),
+              ],
             );
           },
-          loading: () => const LoadingWidget(message: 'Checking authentication...'),
-          error: (e, st) => Center(child: Text('Authentication error: $e', style: TextStyle(color: AppColors.errorColor))),
+          loading: () => const SizedBox(
+              height: 80, child: Center(child: CircularProgressIndicator())),
+          error: (e, st) => const Text('Could not load quote today.'),
         ),
       ),
-      bottomNavigationBar: const CustomBottomNavBar(currentIndex: 0),
+    );
+  }
+
+  Widget _buildLevelProgressCard(
+      BuildContext context, UserLevelProgress levelProgress) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Level ${levelProgress.currentLevel.levelNumber}: ${levelProgress.currentLevel.title}',
+                style: AppTextStyles.headlineSmall),
+            const SizedBox(height: 8),
+            Text(levelProgress.currentLevel.description,
+                style: AppTextStyles.bodyMedium),
+            const SizedBox(height: 16),
+            LinearPercentIndicator(
+              percent: levelProgress.progressPercentage,
+              lineHeight: 12.0,
+              barRadius: const Radius.circular(6),
+              progressColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8.0,
+              children: [
+                TextButton.icon(
+                  onPressed: () => context.push('/preferences'),
+                  icon: const Icon(Icons.tune, size: 18),
+                  label: const Text('Update Preferences'),
+                  style: TextButton.styleFrom(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.diamond_outlined,
+                        size: 14,
+                        color: Theme.of(context).textTheme.bodySmall?.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${levelProgress.currentGems} / ${levelProgress.nextLevel.gemsRequired} Gems',
+                      style: AppTextStyles.labelSmall,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureGrid(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      children: [
+        _buildFeatureCard(context, 'Breathing', Icons.air,
+                () => context.push('/meditate/breathing')),
+        _buildFeatureCard(context, 'Reading', Icons.auto_stories,
+                () => context.push('/reading-therapy')),
+        _buildFeatureCard(context, 'Music', Icons.music_note,
+                () => context.push('/music-therapy')),
+        _buildFeatureCard(context, 'Talk', Icons.chat_bubble,
+                () => context.push('/chatbot')),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard(
+      BuildContext context, String title, IconData icon, VoidCallback onTap) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 12),
+            Text(title, style: AppTextStyles.titleMedium),
+          ],
+        ),
+      ),
     );
   }
 }

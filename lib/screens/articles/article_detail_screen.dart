@@ -1,128 +1,261 @@
 // lib/screens/articles/article_detail_screen.dart
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dhyana/core/constants/app_colors.dart';
+import 'package:dhyana/core/constants/app_text_styles.dart';
+import 'package:dhyana/core/services/task_completion_service.dart';
+import 'package:dhyana/core/utils/markdown_utils.dart';
+import 'package:dhyana/models/article_model.dart';
+import 'package:dhyana/providers/article_cache_provider.dart';
+import 'package:dhyana/providers/article_provider.dart';
+import 'package:dhyana/providers/auth_provider.dart';
+import 'package:dhyana/providers/progress_provider.dart';
+import 'package:dhyana/providers/tts_provider.dart';
+import 'package:dhyana/widgets/common/loading_widget.dart';
+import 'package:dhyana/widgets/common/mini_music_player.dart';
+import 'package:dhyana/widgets/common/tts_player_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dhyana/core/services/image_cache_service.dart';
 
-import 'package:dhyana/core/constants/app_colors.dart';
-import 'package:dhyana/core/constants/app_text_styles.dart';
-import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/providers/article_provider.dart'; // For articleContentProvider
-import 'package:dhyana/models/article_model.dart'; // For ArticleModel
-import 'package:dhyana/core/utils/markdown_utils.dart'; // For Markdown rendering
-import 'package:dhyana/widgets/common/app_bar_widget.dart';
-import 'package:dhyana/widgets/common/loading_widget.dart';
-
-/// A screen that displays the full content of a selected article.
-/// It fetches the article's metadata and Markdown content using Riverpod
-/// and renders the Markdown using `flutter_markdown`.
-class ArticleDetailScreen extends ConsumerWidget {
+class ArticleDetailScreen extends ConsumerStatefulWidget {
   final String? articleId;
-
-  /// Constructor for ArticleDetailScreen.
-  const ArticleDetailScreen({super.key, required this.articleId});
+  const ArticleDetailScreen({super.key, this.articleId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+  ConsumerState<ArticleDetailScreen> createState() =>
+      _ArticleDetailScreenState();
+}
 
+class _ArticleDetailScreenState extends ConsumerState<ArticleDetailScreen> {
+  final Stopwatch _stopwatch = Stopwatch();
+  bool _isTtsPlayerVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _stopwatch.start();
+  }
+
+  @override
+  void dispose() {
+    _stopwatch.stop();
+    final userId = ref.read(authStateProvider).value?.uid;
+    if (userId != null) {
+      ref.read(progressNotifierProvider.notifier).logReadingTime(
+        userId,
+        _stopwatch.elapsed.inSeconds,
+      );
+    }
+    ref.read(ttsProvider.notifier).stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final articleId = widget.articleId;
     if (articleId == null) {
-      return Scaffold(
-        appBar: CustomAppBar(
-          title: 'Article Not Found',
-          showBackButton: true,
-        ),
-        body: Center(
-          child: Text(
-            'Article ID is missing.',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-            ),
-          ),
-        ),
+      return const Scaffold(
+        body: Center(child: Text("Article ID is missing.")),
       );
     }
 
-    // Watch the article content provider for the specific article ID
-    final articleContentAsync = ref.watch(articleContentProvider(articleId!));
-    // Also watch the articlesProvider to get metadata like title, author, etc.
+    final articleContentAsync = ref.watch(articleContentProvider(articleId));
     final articlesAsync = ref.watch(articlesProvider);
+    final isCached = ref.watch(articleCacheStateProvider(articleId));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final customCacheManager = ref.watch(customCacheManagerProvider);
 
     return Scaffold(
-      appBar: CustomAppBar(
-        title: 'Article',
-        showBackButton: true,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDarkMode
-                ? [AppColors.backgroundDark, const Color(0xFF212121)]
-                : [AppColors.backgroundLight, const Color(0xFFEEEEEE)],
-          ),
-        ),
-        child: articleContentAsync.when(
-          data: (markdownContent) {
-            if (markdownContent == null || markdownContent.isEmpty) {
-              return Center(
-                child: Text(
-                  'Article content not found.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                  ),
-                ),
-              );
-            }
+      backgroundColor:
+      isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      floatingActionButton: !_isTtsPlayerVisible
+          ? FloatingActionButton.extended(
+        onPressed: () {
+          setState(() {
+            _isTtsPlayerVisible = true;
+          });
+        },
+        label: const Text("Read Aloud"),
+        icon: const Icon(Icons.volume_up_outlined),
+      )
+          : null,
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: articlesAsync.when(
+                  data: (groupedArticles) {
+                    final allArticles =
+                    groupedArticles.values.expand((list) => list);
+                    ArticleModel? article;
+                    try {
+                      article =
+                          allArticles.firstWhere((a) => a.id == articleId);
+                    } catch (_) {
+                      article = null;
+                    }
 
-            // Try to get article metadata for display
-            ArticleModel? articleMetadata;
-            articlesAsync.whenData((articles) {
-              articleMetadata = articles.firstWhere(
-                    (article) => article.id == articleId,
-                orElse: () => ArticleModel(
-                  id: articleId,
-                  title: 'Unknown Article',
-                  category: 'General',
-                  readingTimeMinutes: 0,
-                  author: 'Unknown',
-                ),
-              );
-            });
+                    if (article == null) {
+                      return const Center(child: Text("Article not found."));
+                    }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppConstants.paddingMedium),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    articleMetadata?.title ?? 'Loading Title...',
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingSmall),
-                  if (articleMetadata != null)
-                    Text(
-                      'By ${articleMetadata!.author} • ${articleMetadata!.readingTimeMinutes} min read',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
-                      ),
-                    ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  // Render Markdown content using MarkdownUtils
-                  MarkdownUtils.buildMarkdownBody(markdownContent, context),
-                ],
+                    return CustomScrollView(
+                      slivers: [
+                        SliverAppBar(
+                          expandedHeight: 300,
+                          pinned: true,
+                          stretch: true,
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          actions: [
+                            IconButton(
+                              icon: Icon(isCached
+                                  ? Icons.bookmark_added_rounded
+                                  : Icons.bookmark_add_outlined),
+                              tooltip: isCached
+                                  ? 'Remove from Offline'
+                                  : 'Save for Offline',
+                              onPressed: () {
+                                final notifier = ref.read(
+                                    articleCacheStateProvider(articleId)
+                                        .notifier);
+                                if (isCached) {
+                                  notifier.removeArticle(
+                                      imageUrl: article?.imageUrl);
+                                } else {
+                                  articleContentAsync.whenData((content) {
+                                    if (content != null) {
+                                      notifier.saveArticle(
+                                          content: content,
+                                          imageUrl: article?.imageUrl);
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                          flexibleSpace: FlexibleSpaceBar(
+                            stretchModes: const [StretchMode.zoomBackground],
+                            background: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (article.imageUrl != null)
+                                  CachedNetworkImage(
+                                    cacheManager: customCacheManager,
+                                    imageUrl: article.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) =>
+                                    const Center(
+                                        child: CircularProgressIndicator()),
+                                    errorWidget: (context, url, error) =>
+                                    const Icon(Icons.error),
+                                  )
+                                else
+                                  Image.network(
+                                    "https://placehold.co/600x400?text=Reading",
+                                    fit: BoxFit.cover,
+                                  ),
+                                const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.center,
+                                      colors: [
+                                        Colors.black87,
+                                        Colors.transparent
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(20.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        article.category.toUpperCase(),
+                                        style: AppTextStyles.labelMedium
+                                            .copyWith(color: Colors.white70),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        article.title,
+                                        style: AppTextStyles.headlineLarge
+                                            .copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "By ${article.author} • ${article.readingTimeMinutes} min read",
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: (isDark
+                                        ? AppColors.textDark
+                                        : AppColors.textLight)
+                                        .withOpacity(0.7),
+                                  ),
+                                ),
+                                const Divider(height: 40),
+                                articleContentAsync.when(
+                                  data: (content) => content != null
+                                      ? MarkdownUtils.buildMarkdownBody(
+                                      content, context)
+                                      : const Text(
+                                      "Article content could not be loaded."),
+                                  loading: () => const LoadingWidget(
+                                      message: "Loading article..."),
+                                  error: (e, st) =>
+                                      Text("Error loading content: $e"),
+                                ),
+                                const SizedBox(height: 80),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                  loading: () =>
+                  const LoadingWidget(message: "Loading article..."),
+                  error: (e, st) => Center(child: Text("Error: $e")),
+                ),
               ),
-            );
-          },
-          loading: () => const LoadingWidget(message: 'Loading article...'),
-          error: (e, st) => Center(
-            child: Text('Error loading article: $e',
-                style: TextStyle(color: AppColors.errorColor)),
+              const MiniMusicPlayer(),
+            ],
           ),
-        ),
+          if (_isTtsPlayerVisible)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: TtsPlayerControls(
+                articleContent: articleContentAsync.value,
+                onClose: () {
+                  ref.read(ttsProvider.notifier).stop();
+                  setState(() {
+                    _isTtsPlayerVisible = false;
+                  });
+                },
+              ),
+            ),
+        ],
       ),
     );
   }

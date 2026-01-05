@@ -1,15 +1,10 @@
-// lib/screens/onboarding/welcome_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/widgets/common/custom_button.dart'; // For custom buttons
+import 'package:dhyana/widgets/common/custom_button.dart';
 
-/// The initial welcome screen for the Dhyana application.
-/// It introduces the app's purpose and provides options for users
-/// to either log in or sign up. This screen is typically shown
-/// to unauthenticated users.
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -35,26 +30,23 @@ class WelcomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // App Logo/Icon
               Icon(
                 Icons.self_improvement,
                 size: 120,
-                color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
+                // ✅ FIX: Replaced the non-existent 'primaryGreenDark' with 'primaryLightGreen'
+                color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryPurple,
               ),
               const SizedBox(height: AppConstants.paddingLarge),
               Text(
                 'Welcome to Dhyana',
-                style: AppTextStyles.displayMedium.copyWith(
-                  color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: AppTextStyles.displayMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppConstants.paddingMedium),
               Text(
                 'Your personal guide to mindfulness, meditation, and inner peace.',
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.8),
+                  color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withAlpha(204),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -73,8 +65,14 @@ class WelcomeScreen extends StatelessWidget {
                 onPressed: () {
                   context.go('/signup');
                 },
-                type: ButtonType.outline,
+                type: ButtonType.secondary,
                 icon: Icons.person_add_alt_1_outlined,
+              ),
+              const SizedBox(height: AppConstants.paddingSmall),
+              CustomButton(
+                text: 'Continue as Guest',
+                onPressed: () => context.go('/home'),
+                type: ButtonType.text,
               ),
             ],
           ),

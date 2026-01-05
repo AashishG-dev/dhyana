@@ -1,4 +1,3 @@
-// lib/screens/onboarding/profile_setup_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,17 +6,14 @@ import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
 import 'package:dhyana/core/utils/validators.dart';
-import 'package:dhyana/core/utils/helpers.dart'; // For showing snackbar/dialogs
-import 'package:dhyana/providers/auth_provider.dart'; // For authStateProvider and firestoreServiceProvider
-import 'package:dhyana/providers/user_profile_provider.dart'; // For userProfileNotifierProvider
-import 'package:dhyana/models/user_model.dart'; // For UserModel
+import 'package:dhyana/core/utils/helpers.dart';
+import 'package:dhyana/providers/auth_provider.dart';
+import 'package:dhyana/providers/user_profile_provider.dart';
+import 'package:dhyana/models/user_model.dart';
 import 'package:dhyana/widgets/common/custom_text_field.dart';
 import 'package:dhyana/widgets/common/custom_button.dart';
-import 'package:dhyana/widgets/common/loading_widget.dart'; // For loading indicator
+import 'package:dhyana/widgets/common/loading_widget.dart';
 
-/// A screen for new users to set up their profile after registration.
-/// It allows users to enter their name, and optionally set meditation goals.
-/// This screen ensures that a basic user profile is created in Firestore.
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
 
@@ -36,16 +32,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     super.dispose();
   }
 
-  /// Handles the profile setup process.
-  /// It validates the form, retrieves the current user, creates/updates
-  /// their profile in Firestore, and navigates to the home screen.
   Future<void> _handleProfileSetup() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() {
         _isLoading = true;
       });
 
-      final currentUser = ref.read(authStateProvider).value; // Get the current Firebase User
+      final currentUser = ref.read(authStateProvider).value;
       if (currentUser == null) {
         debugPrint('No authenticated user found for profile setup.');
         if (mounted) {
@@ -54,7 +47,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             title: 'Error',
             message: 'No active user session. Please log in again.',
           );
-          context.go('/login'); // Redirect to login
+          context.go('/login');
         }
         setState(() { _isLoading = false; });
         return;
@@ -63,20 +56,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       try {
         final userProfileNotifier = ref.read(userProfileNotifierProvider.notifier);
 
-        // Create a new UserModel instance with updated name and current user's ID/email
         final updatedUser = UserModel(
           id: currentUser.uid,
-          email: currentUser.email ?? 'no_email@example.com', // Use existing email or fallback
+          email: currentUser.email ?? 'no_email@example.com',
           name: _nameController.text.trim(),
-          createdAt: DateTime.now(), // Assuming this is initial setup
+          createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
-          meditationGoals: [], // Can be expanded later for user selection
+          meditationGoals: [],
         );
 
         await userProfileNotifier.updateUserProfile(updatedUser);
 
         if (mounted) {
-          context.go('/home'); // Navigate to home after profile setup
+          context.go('/home');
           Helpers.showSnackbar(context, 'Profile setup complete!');
         }
       } catch (e) {
@@ -107,13 +99,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       appBar: AppBar(
         title: Text(
           'Complete Your Profile',
-          style: AppTextStyles.headlineSmall.copyWith(
-            color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-          ),
+          style: AppTextStyles.headlineSmall,
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        automaticallyImplyLeading: false, // Hide back button for profile setup
+        automaticallyImplyLeading: false,
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -139,18 +129,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   children: [
                     Text(
                       'Just a few more details!',
-                      style: AppTextStyles.displaySmall.copyWith(
+                      style: AppTextStyles.displayLarge.copyWith(
                         color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                        fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppConstants.paddingMedium),
                     Text(
                       'Tell us a bit about yourself to personalize your Dhyana experience.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                      ),
+                      style: AppTextStyles.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppConstants.paddingLarge),
@@ -161,10 +148,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       validator: (value) => Validators.isValidName(value, minLength: 2),
                       prefixIcon: Icon(
                         Icons.person_outline,
-                        color: isDarkMode ? AppColors.textDark.withOpacity(0.7) : AppColors.textLight.withOpacity(0.7),
+                        color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
                       ),
                     ),
-                    // You can add more fields here for meditation goals, etc.
                     const SizedBox(height: AppConstants.paddingLarge),
                     _isLoading
                         ? const LoadingWidget()

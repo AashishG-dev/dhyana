@@ -1,6 +1,5 @@
 // lib/core/models/chat_message_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp conversion
-import 'package:flutter/foundation.dart'; // For debugPrint
 
 /// Enum to define the sender of a chat message.
 enum MessageSender {

@@ -1,88 +1,46 @@
 // lib/core/utils/markdown_utils.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering Markdown content
-import 'package:dhyana/core/constants/app_colors.dart'; // For styling Markdown elements
-import 'package:dhyana/core/constants/app_text_styles.dart'; // For styling Markdown elements
-import 'package:dhyana/core/constants/app_constants.dart'; // For border radius and other constants
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:dhyana/core/constants/app_colors.dart';
+import 'package:dhyana/core/constants/app_text_styles.dart';
 
-/// Utilities for rendering Markdown content, specifically for educational articles
-/// and stress relief exercise instructions within the Dhyana application.
+/// Utility class to render Markdown content with app-specific styles.
 class MarkdownUtils {
-  /// Returns a MarkdownBody widget configured with Dhyana's styling.
-  /// This function centralizes the styling for all Markdown content,
-  /// ensuring consistency and adherence to the app's theme, including Glass Morphism.
-  static Widget buildMarkdownBody(String data, BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    // Determine text color based on theme
-    final textColor = isDarkMode ? AppColors.textDark : AppColors.textLight;
-    final linkColor = isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue;
+  static Widget buildMarkdownBody(String content, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppColors.textDark : AppColors.textLight;
 
     return MarkdownBody(
-      data: data,
-      selectable: true, // Allow users to select and copy text
+      data: content,
+      selectable: true,
+      // ✅ UPDATED: Using a more detailed and consistent style sheet
       styleSheet: MarkdownStyleSheet(
-        // Headings
+        p: AppTextStyles.bodyLarge.copyWith(color: textColor, height: 1.5),
         h1: AppTextStyles.headlineLarge.copyWith(color: textColor),
         h2: AppTextStyles.headlineMedium.copyWith(color: textColor),
         h3: AppTextStyles.headlineSmall.copyWith(color: textColor),
         h4: AppTextStyles.titleLarge.copyWith(color: textColor),
-        h5: AppTextStyles.titleMedium.copyWith(color: textColor),
-        h6: AppTextStyles.titleSmall.copyWith(color: textColor),
-
-        // Paragraph text
-        p: AppTextStyles.bodyMedium.copyWith(color: textColor, height: 1.5),
-
-        // Strong (bold) text
-        strong: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold, color: textColor),
-
-        // Emphasis (italic) text
-        em: AppTextStyles.bodyMedium.copyWith(fontStyle: FontStyle.italic, color: textColor),
-
-        // Links
-        a: AppTextStyles.bodyMedium.copyWith(color: linkColor, decoration: TextDecoration.underline),
-
-        // Blockquote
-        blockquote: AppTextStyles.bodyMedium.copyWith(
-          fontStyle: FontStyle.italic,
-          color: textColor.withOpacity(0.7),
-        ),
+        listBullet: AppTextStyles.bodyLarge.copyWith(color: textColor),
         blockquoteDecoration: BoxDecoration(
-          border: Border(left: BorderSide(color: linkColor, width: 4)),
-          color: (isDarkMode ? AppColors.glassDarkSurface : AppColors.glassLightSurface).withOpacity(0.5), // Subtle glass effect
-          borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
+          color: Colors.grey.withOpacity(0.1),
+          border: Border(
+            left: BorderSide(
+              color: isDark ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
+              width: 4.0,
+            ),
+          ),
         ),
-        blockquotePadding: const EdgeInsets.all(AppConstants.paddingSmall),
-
-        // Code blocks
-        code: AppTextStyles.bodySmall.copyWith(
-          fontFamily: 'monospace',
-          backgroundColor: (isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight).withOpacity(0.7),
-          color: textColor,
+        blockquotePadding: const EdgeInsets.all(16.0),
+        blockquote: AppTextStyles.bodyLarge.copyWith(
+          fontStyle: FontStyle.italic,
+          color: textColor.withOpacity(0.8),
         ),
-        codeblockDecoration: BoxDecoration(
-          color: (isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight).withOpacity(0.7),
-          borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
-          border: Border.all(color: isDarkMode ? AppColors.glassBorderDark : AppColors.glassBorderLight),
+        code: AppTextStyles.bodyMedium.copyWith(
+          fontFamily: "monospace",
+          backgroundColor: Colors.grey.withOpacity(0.15),
+          color: textColor.withOpacity(0.9),
         ),
-        codeblockPadding: const EdgeInsets.all(AppConstants.paddingSmall),
-
-        // Lists
-        listBullet: AppTextStyles.bodyMedium.copyWith(color: textColor),
-        // listItem: AppTextStyles.bodyMedium.copyWith(color: textColor), // Removed as it's not a valid parameter
-
-        // Table
-        tableBody: AppTextStyles.bodySmall.copyWith(color: textColor),
-        tableHead: AppTextStyles.labelMedium.copyWith(color: textColor, fontWeight: FontWeight.bold),
-        tableBorder: TableBorder.all(color: textColor.withOpacity(0.5)),
       ),
-      // Handle taps on links if needed
-      onTapLink: (text, href, title) {
-        // You can use url_launcher package here to open external links
-        // For example: launchUrl(Uri.parse(href!));
-        debugPrint('Tapped on link: $href');
-      },
     );
   }
 }

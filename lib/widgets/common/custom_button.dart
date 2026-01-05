@@ -1,144 +1,83 @@
 // lib/widgets/common/custom_button.dart
 import 'package:flutter/material.dart';
 import 'package:dhyana/core/constants/app_colors.dart';
-import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
+import 'package:dhyana/core/constants/app_text_styles.dart';
 
-/// Defines the type of button to render.
-/// This enum must be declared outside the class.
-enum ButtonType {
-  primary,
-  secondary,
-  text,
-  outline,
-}
+enum ButtonType { primary, secondary, text }
 
-/// A customizable button widget that adheres to the Dhyana app's design system,
-/// including the Glass Morphism theme. It supports different types (primary, secondary, text)
-/// and can display a loading indicator.
 class CustomButton extends StatelessWidget {
   final String text;
-  final VoidCallback? onPressed;
-  final bool isLoading;
+  final VoidCallback onPressed;
   final ButtonType type;
-  final IconData? icon; // Optional icon for the button
+  final IconData? icon;
+  final bool isFullWidth;
 
-
-  /// Constructor for CustomButton.
   const CustomButton({
     super.key,
     required this.text,
     required this.onPressed,
-    this.isLoading = false,
-    this.type = ButtonType.primary, // Default to primary button
+    this.type = ButtonType.primary,
     this.icon,
+    this.isFullWidth = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    Widget buttonChild = isLoading
-        ? SizedBox(
-      width: AppConstants.paddingMedium, // Size of the loading indicator
-      height: AppConstants.paddingMedium,
-      child: CircularProgressIndicator(
-        color: type == ButtonType.text
-            ? (isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue)
-            : (isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight),
-        strokeWidth: 2.0,
-      ),
-    )
-        : Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(
-            icon,
-            color: type == ButtonType.text
-                ? (isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue)
-                : (isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight),
-            size: 18,
-          ),
-          const SizedBox(width: AppConstants.paddingSmall / 2),
-        ],
-        Text(
-          text,
-          style: AppTextStyles.buttonText.copyWith(
-            color: type == ButtonType.text
-                ? (isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue)
-                : (isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight),
-          ),
-        ),
-      ],
-    );
+    Color bgColor;
+    Color textColor;
+    Color borderColor;
 
     switch (type) {
       case ButtonType.primary:
-        return ElevatedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-            foregroundColor: isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight,
-            textStyle: AppTextStyles.buttonText,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingLarge,
-                vertical: AppConstants.paddingMedium),
-            elevation: 3,
-          ),
-          child: buttonChild,
-        );
+      // ✅ Use theme-aware colors
+        bgColor = isDark ? AppColors.primaryBlue : AppColors.primaryTeal;
+        textColor = Colors.white;
+        borderColor = Colors.transparent;
+        break;
       case ButtonType.secondary:
-        return ElevatedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDarkMode ? AppColors.secondaryBrown : AppColors.secondaryOrange,
-            foregroundColor: isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight,
-            textStyle: AppTextStyles.buttonText,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingLarge,
-                vertical: AppConstants.paddingMedium),
-            elevation: 3,
-          ),
-          child: buttonChild,
-        );
+        bgColor = Colors.transparent;
+        textColor = isDark ? AppColors.textDark : AppColors.textLight;
+        borderColor = isDark ? AppColors.textDark : AppColors.textLight;
+        break;
       case ButtonType.text:
-        return TextButton(
-          onPressed: isLoading ? null : onPressed,
-          style: TextButton.styleFrom(
-            foregroundColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-            textStyle: AppTextStyles.buttonText.copyWith(fontWeight: FontWeight.w400),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            ),
-          ),
-          child: buttonChild,
-        );
-      case ButtonType.outline:
-        return OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-            textStyle: AppTextStyles.buttonText,
-            side: BorderSide(
-                color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                width: 1.5),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingLarge,
-                vertical: AppConstants.paddingMedium),
-          ),
-          child: buttonChild,
-        );
+        bgColor = Colors.transparent;
+        // ✅ Use theme-aware colors
+        textColor = isDark ? AppColors.primaryBlue : AppColors.primaryTeal;
+        borderColor = Colors.transparent;
+        break;
     }
+
+    return SizedBox(
+      width: isFullWidth ? double.infinity : null,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: bgColor,
+          foregroundColor: textColor,
+          elevation: type == ButtonType.text ? 0 : 2,
+          padding: const EdgeInsets.symmetric(
+            vertical: AppConstants.paddingMedium,
+            horizontal: AppConstants.paddingLarge,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            side: BorderSide(color: borderColor, width: 1.2),
+          ),
+        ),
+        icon: icon != null
+            ? Icon(icon, color: textColor, size: 20)
+            : const SizedBox.shrink(),
+        label: Text(
+          text,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: textColor,
+            fontWeight: FontWeight.w600, // button feel
+          ),
+        ),
+      ),
+    );
   }
 }

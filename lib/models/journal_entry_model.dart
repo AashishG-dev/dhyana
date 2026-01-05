@@ -1,16 +1,16 @@
 // lib/core/models/journal_entry_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp conversion
-import 'package:flutter/foundation.dart'; // For debugPrint
 
 /// Defines the data structure for a personal journal entry within the Dhyana application.
-/// This model includes properties like ID, user ID, content, mood rating,
-/// and a timestamp. It also provides methods for serialization to and from JSON.
 class JournalEntryModel {
   final String? id; // Document ID from Firestore (optional for new entries)
   final String userId; // The ID of the user who created this entry
   final String content; // The main text content of the journal entry
   final int moodRating; // A numerical rating for mood (e.g., 1-5, or 1-10)
   final DateTime timestamp; // The date and time the entry was created/last updated
+  final String gratitude;
+  final String? imageUrl;
+  final bool isPinned; // ✅ ADDED: To track pinned status
 
   /// Constructor for JournalEntryModel.
   JournalEntryModel({
@@ -19,31 +19,35 @@ class JournalEntryModel {
     required this.content,
     required this.moodRating,
     required this.timestamp,
+    this.gratitude = '',
+    this.imageUrl,
+    this.isPinned = false, // ✅ ADDED: Default to false
   });
 
   /// Factory constructor to create a [JournalEntryModel] from a JSON map.
-  /// This is used when retrieving journal entries from Firestore.
-  /// [docId] is the Firestore document ID, which becomes the model's ID.
   factory JournalEntryModel.fromJson(Map<String, dynamic> json, String docId) {
     return JournalEntryModel(
       id: docId,
       userId: json['userId'] as String,
       content: json['content'] as String,
       moodRating: json['moodRating'] as int,
-      // Convert Firestore Timestamp to DateTime
       timestamp: (json['timestamp'] as Timestamp).toDate(),
+      gratitude: json['gratitude'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String?,
+      isPinned: json['isPinned'] as bool? ?? false, // ✅ ADDED: Read from JSON
     );
   }
 
   /// Converts this [JournalEntryModel] instance into a JSON map.
-  /// This is used when saving journal entries to Firestore.
   Map<String, dynamic> toJson() {
     return {
       'userId': userId,
       'content': content,
       'moodRating': moodRating,
-      // Convert DateTime to Firestore Timestamp
       'timestamp': Timestamp.fromDate(timestamp),
+      'gratitude': gratitude,
+      'imageUrl': imageUrl,
+      'isPinned': isPinned, // ✅ ADDED: Save to JSON
     };
   }
 
@@ -54,6 +58,9 @@ class JournalEntryModel {
     String? content,
     int? moodRating,
     DateTime? timestamp,
+    String? gratitude,
+    String? imageUrl,
+    bool? isPinned, // ✅ ADDED: To copyWith
   }) {
     return JournalEntryModel(
       id: id ?? this.id,
@@ -61,6 +68,9 @@ class JournalEntryModel {
       content: content ?? this.content,
       moodRating: moodRating ?? this.moodRating,
       timestamp: timestamp ?? this.timestamp,
+      gratitude: gratitude ?? this.gratitude,
+      imageUrl: imageUrl ?? this.imageUrl,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 

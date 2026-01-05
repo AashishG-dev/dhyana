@@ -13,7 +13,20 @@
           "package_name": "com.example.dhyana"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "917482502252-upbc89b4cc7r45hpa0ch3eggi9959010.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.dhyana",
+            "certificate_hash": "43f7136d8dbe82b02d143691859a9d47b1e65052"
+          }
+        },
+        {
+          "client_id": "917482502252-22kgsun5i2p9q3ggr46cut87duqj2p7q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBcYvEzPRmSQiXIPHmY1lzR97mZ3haUOno"
@@ -21,7 +34,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "917482502252-22kgsun5i2p9q3ggr46cut87duqj2p7q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "917482502252-eeh7i5bqd3hg69kkgg05k4he76ntc7ue.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.dhyana"
+              }
+            }
+          ]
         }
       }
     }

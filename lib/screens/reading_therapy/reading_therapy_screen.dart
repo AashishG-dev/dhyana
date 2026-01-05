@@ -1,109 +1,200 @@
 // lib/screens/reading_therapy/reading_therapy_screen.dart
+import 'dart:async';
+import 'package:dhyana/models/article_model.dart';
+import 'package:dhyana/providers/article_provider.dart';
+import 'package:dhyana/providers/auth_provider.dart';
+import 'package:dhyana/providers/progress_provider.dart';
+import 'package:dhyana/widgets/common/app_bar_widget.dart';
+import 'package:dhyana/widgets/common/loading_widget.dart';
+import 'package:dhyana/widgets/common/mini_music_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
-import 'package:dhyana/providers/article_provider.dart';
-import 'package:dhyana/widgets/common/loading_widget.dart';
-import 'package:dhyana/widgets/cards/article_card.dart';
-// ✅ ADD: Import the missing ArticleModel.
-import 'package:dhyana/models/article_model.dart';
 
-class ReadingTherapyScreen extends ConsumerWidget {
+class ReadingTherapyScreen extends ConsumerStatefulWidget {
   const ReadingTherapyScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReadingTherapyScreen> createState() =>
+      _ReadingTherapyScreenState();
+}
+
+class _ReadingTherapyScreenState extends ConsumerState<ReadingTherapyScreen> {
+  final Stopwatch _stopwatch = Stopwatch();
+
+  @override
+  void dispose() {
+    _stopwatch.stop();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _stopwatch.reset();
+    _stopwatch.start();
+  }
+
+  void _stopAndLogTimer() {
+    _stopwatch.stop();
+    final userId = ref.read(authStateProvider).value?.uid;
+    if (userId != null) {
+      ref
+          .read(progressNotifierProvider.notifier)
+          .logReadingTime(userId, _stopwatch.elapsed.inSeconds);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final articlesAsync = ref.watch(articlesProvider);
+    final mindfulMoment = ref.watch(mindfulMomentProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    ref.listen<MindfulMoment>(mindfulMomentProvider, (previous, next) {
+      if (next.state == MindfulMomentState.data) {
+        _startTimer();
+      }
+    });
+
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 250.0,
-            pinned: true,
-            stretch: true,
-            backgroundColor: AppColors.backgroundDark,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => context.pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              title: Text('Reading Therapy', style: AppTextStyles.headlineSmall.copyWith(color: Colors.white)),
-              background: Container(
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: const NetworkImage('https://images.unsplash.com/photo-1521587760476-6c12a4b040da?q=80&w=2070&auto=format&fit=crop'),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.6), BlendMode.darken),
-                  ),
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'Find happiness, knowledge, and lighten your stress side by side.',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyLarge.copyWith(color: Colors.white70),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SliverList(
-            delegate: SliverChildListDelegate([
-              _buildSectionTitle('Benefits of Reading', isDarkMode),
-              _buildBenefitsCard(),
-              _buildSectionTitle('Inspirational Stories', isDarkMode),
-              articlesAsync.when(
-                data: (articles) {
-                  if (articles.isEmpty) {
-                    return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text('No articles available.')));
-                  }
-                  return _buildHorizontalArticleList(context, articles);
-                },
-                loading: () => const SizedBox(height: 250, child: LoadingWidget()),
-                error: (e, st) => Center(child: Text('Error: $e')),
-              ),
-              _buildSectionTitle('Motivational Quotes', isDarkMode),
-              _buildHorizontalQuoteList(),
-              const SizedBox(height: 40),
-            ]),
+      appBar: CustomAppBar(
+        title: 'Reading Therapy',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border),
+            tooltip: 'Saved Articles',
+            onPressed: () => context.push('/saved-articles'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, bool isDarkMode) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 12.0),
-      child: Text(
-        title,
-        style: AppTextStyles.headlineSmall.copyWith(
-          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDarkMode
+                ? [AppColors.backgroundDark, const Color(0xFF2C2C2C)]
+                : [AppColors.backgroundLight, const Color(0xFFF0F0F0)],
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                children: [
+                  _buildMindfulMomentsSection(context, mindfulMoment),
+                  articlesAsync.when(
+                    data: (groupedArticles) {
+                      if (groupedArticles.isEmpty) {
+                        return const Center(
+                            child: Text('No articles available.'));
+                      }
+                      final categories = groupedArticles.keys.toList();
+                      return Column(
+                        children: categories.map((category) {
+                          return _buildArticleCategoryRow(
+                              context, category, groupedArticles[category]!);
+                        }).toList(),
+                      );
+                    },
+                    loading: () =>
+                    const SizedBox(height: 250, child: LoadingWidget()),
+                    error: (e, st) => Center(child: Text('Error: $e')),
+                  ),
+                ],
+              ),
+            ),
+            const MiniMusicPlayer(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBenefitsCard() {
+  Widget _buildMindfulMomentsSection(
+      BuildContext context, MindfulMoment mindfulMoment) {
+    final notifier = ref.read(mindfulMomentProvider.notifier);
+    final categories = [
+      'Affirmation',
+      'Short Story',
+      'Mindful Joke',
+      'Today\'s Fact'
+    ];
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      margin: const EdgeInsets.all(16.0),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Bibliotherapy', style: AppTextStyles.titleLarge),
+            Text('Mindful Moments', style: AppTextStyles.headlineSmall),
             const SizedBox(height: 8),
-             Text(
-              'Also referred to as book therapy, is a creative arts therapy that uses storytelling or the reading of specific texts. It uses an individual\'s relationship to the content of books and poetry and other written words as therapy.',
-              style: AppTextStyles.bodyMedium,
+            const Text(
+                'Tap a category for a quick dose of mindfulness generated by AI.'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: categories.map((category) {
+                return ActionChip(
+                  label: Text(category),
+                  onPressed: () => notifier.fetchMoment(category),
+                  avatar: const Icon(Icons.auto_awesome, size: 16),
+                );
+              }).toList(),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: mindfulMoment.state != MindfulMomentState.initial
+                  ? Padding(
+                padding: const EdgeInsets.only(top: 16.0),
+                child: Container(
+                  key: ValueKey(mindfulMoment.state),
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.1))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () {
+                              _stopAndLogTimer();
+                              notifier.clearMoment();
+                            },
+                            tooltip: 'Close and log reading time',
+                          )
+                        ],
+                      ),
+                      if (mindfulMoment.state ==
+                          MindfulMomentState.loading)
+                        const LoadingWidget(),
+                      if (mindfulMoment.state ==
+                          MindfulMomentState.data ||
+                          mindfulMoment.state == MindfulMomentState.error)
+                        Text(mindfulMoment.content,
+                            style: AppTextStyles.bodyLarge),
+                    ],
+                  ),
+                ),
+              )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
@@ -111,58 +202,66 @@ class ReadingTherapyScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHorizontalArticleList(BuildContext context, List<ArticleModel> articles) {
-    return SizedBox(
-      height: 280,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        itemCount: articles.length,
-        itemBuilder: (context, index) {
-          return SizedBox(
-            width: 220,
-            child: ArticleCard(
-              article: articles[index],
-              onTap: () => context.push('/article-detail/${articles[index].id}'),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHorizontalQuoteList() {
-    final quotes = [
-      {'quote': 'The only way to do great work is to love what you do.', 'author': 'Steve Jobs'},
-      {'quote': 'Believe you can and you\'re halfway there.', 'author': 'Theodore Roosevelt'},
-      {'quote': 'The future belongs to those who believe in the beauty of their dreams.', 'author': 'Eleanor Roosevelt'},
-    ];
-
-    return SizedBox(
-      height: 150,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        itemCount: quotes.length,
-        itemBuilder: (context, index) {
-          return SizedBox(
-            width: 300,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('"${quotes[index]['quote']}"', style: AppTextStyles.bodyLarge, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Text('- ${quotes[index]['author']}', style: AppTextStyles.bodyMedium),
-                  ],
+  Widget _buildArticleCategoryRow(BuildContext context, String categoryTitle,
+      List<ArticleModel> articles) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 12.0),
+          child: Text(
+            categoryTitle,
+            style: AppTextStyles.headlineSmall,
+          ),
+        ),
+        SizedBox(
+          height: 280,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            itemCount: articles.length,
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: 220,
+                child: InkWell(
+                  onTap: () =>
+                      context.push('/article-detail/${articles[index].id}'),
+                  child: Card(
+                    elevation: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (articles[index].imageUrl != null)
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              topRight: Radius.circular(12),
+                            ),
+                            child: Image.network(
+                              articles[index].imageUrl!,
+                              height: 150,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            articles[index].title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

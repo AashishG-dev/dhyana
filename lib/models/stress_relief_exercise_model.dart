@@ -1,6 +1,6 @@
 // lib/core/models/stress_relief_exercise_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp conversion
-import 'package:flutter/foundation.dart'; // For debugPrint
+
 
 /// Defines the data structure for a stress relief exercise.
 /// This model includes properties like ID, title, description, category,

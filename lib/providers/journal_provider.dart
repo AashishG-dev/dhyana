@@ -1,71 +1,146 @@
-// lib/core/providers/journal_provider.dart
+// lib/providers/journal_provider.dart
+import 'package:dhyana/core/services/storage_service.dart';
+import 'package:dhyana/providers/progress_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart'; // For debugPrint
+import 'package:flutter/foundation.dart';
+import 'dart:math';
 
-import 'package:dhyana/core/services/firestore_service.dart'; // Import FirestoreService
-import 'package:dhyana/models/journal_entry_model.dart'; // Import JournalEntryModel
-import 'package:dhyana/providers/auth_provider.dart'; // To access firestoreServiceProvider and authStateProvider
+import 'package:dhyana/core/services/firestore_service.dart';
+import 'package:dhyana/models/journal_entry_model.dart';
+import 'package:dhyana/providers/auth_provider.dart';
 
-/// Provides a stream of [JournalEntryModel]s for the current user.
-/// It depends on the `authStateProvider` to get the user's ID.
-/// This is a family provider because it needs the `userId` to fetch specific journal entries.
+const String _guestJournalKey = 'guest_journal_entries';
+
+final guestJournalEntriesProvider =
+StateProvider<List<JournalEntryModel>>((ref) {
+  final storageService = ref.watch(storageServiceProvider);
+  final jsonList = storageService.getJsonList(_guestJournalKey);
+  if (jsonList != null) {
+    return jsonList
+        .map((json) => JournalEntryModel.fromJson(json, json['id']))
+        .toList();
+  }
+  return [];
+});
+
 final userJournalEntriesProvider =
 StreamProvider.family<List<JournalEntryModel>, String>((ref, userId) {
+  if (userId == 'guest') {
+    return Stream.value(ref.watch(guestJournalEntriesProvider));
+  }
   final firestoreService = ref.watch(firestoreServiceProvider);
   debugPrint('Fetching journal entries for user: $userId');
   return firestoreService.getJournalEntries(userId);
 });
 
-/// A [StateNotifier] to manage the creation, update, and deletion of journal entries.
 class JournalNotifier extends StateNotifier<AsyncValue<void>> {
   final FirestoreService _firestoreService;
+  final StorageService _storageService;
+  final Ref _ref;
 
-  JournalNotifier(this._firestoreService) : super(const AsyncValue.data(null));
+  JournalNotifier(this._firestoreService, this._storageService, this._ref)
+      : super(const AsyncValue.data(null));
 
-  /// Adds a new journal entry.
   Future<void> addJournalEntry(String userId, JournalEntryModel entry) async {
     state = const AsyncValue.loading();
     try {
-      await _firestoreService.addJournalEntry(userId, entry);
+      if (userId == 'guest') {
+        final currentEntries = _ref.read(guestJournalEntriesProvider);
+        final newEntry =
+        entry.copyWith(id: DateTime.now().millisecondsSinceEpoch.toString());
+        final updatedEntries = [...currentEntries, newEntry];
+        await _storageService.saveJsonList(
+            _guestJournalKey, updatedEntries.map((e) => e.toJson()).toList());
+        _ref.read(guestJournalEntriesProvider.notifier).state = updatedEntries;
+      } else {
+        await _firestoreService.addJournalEntry(userId, entry);
+        // ✅ FIXED: Invalidate the provider to force a UI refresh from the local cache.
+        _ref.invalidate(userJournalEntriesProvider(userId));
+      }
+
+      await _ref.read(progressNotifierProvider.notifier).logJournalEntry(
+        userId,
+        isNewEntry: true,
+        moodRating: entry.moodRating,
+        timestamp: entry.timestamp,
+      );
       state = const AsyncValue.data(null);
-      debugPrint('Journal entry added successfully.');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
-      debugPrint('Error adding journal entry: $e');
     }
   }
 
-  /// Updates an existing journal entry.
   Future<void> updateJournalEntry(String userId, JournalEntryModel entry) async {
     state = const AsyncValue.loading();
     try {
-      await _firestoreService.updateJournalEntry(userId, entry);
+      if (userId == 'guest') {
+        final currentEntries = _ref.read(guestJournalEntriesProvider);
+        final entryIndex = currentEntries.indexWhere((e) => e.id == entry.id);
+        if (entryIndex != -1) {
+          currentEntries[entryIndex] = entry;
+          await _storageService.saveJsonList(
+              _guestJournalKey, currentEntries.map((e) => e.toJson()).toList());
+          _ref.read(guestJournalEntriesProvider.notifier).state = [
+            ...currentEntries
+          ];
+        }
+      } else {
+        await _firestoreService.updateJournalEntry(userId, entry);
+        // ✅ FIXED: Invalidate the provider to force a UI refresh from the local cache.
+        _ref.invalidate(userJournalEntriesProvider(userId));
+      }
+
+      await _ref.read(progressNotifierProvider.notifier).logJournalEntry(
+        userId,
+        isNewEntry: false,
+        moodRating: entry.moodRating,
+        timestamp: entry.timestamp,
+      );
       state = const AsyncValue.data(null);
-      debugPrint('Journal entry updated successfully.');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
-      debugPrint('Error updating journal entry: $e');
     }
   }
 
-  /// Deletes a journal entry.
   Future<void> deleteJournalEntry(String userId, String entryId) async {
     state = const AsyncValue.loading();
     try {
-      await _firestoreService.deleteJournalEntry(userId, entryId);
+      if (userId == 'guest') {
+        final currentEntries = _ref.read(guestJournalEntriesProvider);
+        currentEntries.removeWhere((e) => e.id == entryId);
+        await _storageService.saveJsonList(
+            _guestJournalKey, currentEntries.map((e) => e.toJson()).toList());
+        _ref.read(guestJournalEntriesProvider.notifier).state = [
+          ...currentEntries
+        ];
+      } else {
+        await _firestoreService.deleteJournalEntry(userId, entryId);
+        // ✅ FIXED: Invalidate the provider to force a UI refresh from the local cache.
+        _ref.invalidate(userJournalEntriesProvider(userId));
+      }
       state = const AsyncValue.data(null);
-      debugPrint('Journal entry deleted successfully.');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
-      debugPrint('Error deleting journal entry: $e');
     }
+  }
+
+  Future<void> togglePinStatus(String userId, JournalEntryModel entry) async {
+    final currentEntries = _ref.read(userJournalEntriesProvider(userId)).value ?? [];
+    final pinnedCount = currentEntries.where((e) => e.isPinned).length;
+
+    if (!entry.isPinned && pinnedCount >= 3) {
+      throw Exception('You can only pin a maximum of 3 journal entries.');
+    }
+
+    final updatedEntry = entry.copyWith(isPinned: !entry.isPinned);
+    // The updateJournalEntry function already handles invalidation, so we just call it.
+    await updateJournalEntry(userId, updatedEntry);
   }
 }
 
-/// The main provider for managing journal entries actions.
-/// Widgets can use this to perform CRUD operations on journal entries.
 final journalNotifierProvider =
 StateNotifierProvider<JournalNotifier, AsyncValue<void>>((ref) {
   final firestoreService = ref.watch(firestoreServiceProvider);
-  return JournalNotifier(firestoreService);
+  final storageService = ref.watch(storageServiceProvider);
+  return JournalNotifier(firestoreService, storageService, ref);
 });

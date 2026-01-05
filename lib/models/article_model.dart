@@ -1,21 +1,18 @@
-// lib/core/models/article_model.dart
-import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp conversion
-import 'package:flutter/foundation.dart'; // For debugPrint
+// lib/models/article_model.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
-/// Defines the data structure for an educational article within the Dhyana application.
-/// This model includes properties like ID, title, category, image URL,
-/// reading time, and author. It also provides methods for serialization
-/// to and from JSON.
 class ArticleModel {
-  final String? id; // Document ID from Firestore
+  final String? id;
   final String title;
-  final String category; // e.g., 'Mindfulness', 'Stress Management', 'Well-being'
-  final String? imageUrl; // Cloudinary URL for the article's thumbnail image
-  final int readingTimeMinutes; // Estimated reading time in minutes
+  final String category;
+  final String? imageUrl;
+  final int readingTimeMinutes;
   final String author;
-  final DateTime? publishedAt; // Timestamp of when the article was published
+  final DateTime? publishedAt;
+  // ✅ ADDED: The main content of the article
+  final String? content;
 
-  /// Constructor for ArticleModel.
   ArticleModel({
     this.id,
     required this.title,
@@ -24,25 +21,24 @@ class ArticleModel {
     required this.readingTimeMinutes,
     required this.author,
     this.publishedAt,
+    // ✅ ADDED: Initialize in constructor
+    this.content,
   });
 
-  /// Factory constructor to create an [ArticleModel] from a JSON map.
-  /// This is used when retrieving article metadata from Firestore.
-  /// [docId] is the Firestore document ID, which becomes the model's ID.
   factory ArticleModel.fromJson(Map<String, dynamic> json, String docId) {
     return ArticleModel(
       id: docId,
-      title: json['title'] as String,
-      category: json['category'] as String,
+      title: json['title'] as String? ?? 'Untitled Article',
+      category: json['category'] as String? ?? 'General',
       imageUrl: json['imageUrl'] as String?,
-      readingTimeMinutes: json['readingTimeMinutes'] as int,
-      author: json['author'] as String,
+      readingTimeMinutes: json['readingTimeMinutes'] as int? ?? 0,
+      author: json['author'] as String? ?? 'Unknown Author',
       publishedAt: (json['publishedAt'] as Timestamp?)?.toDate(),
+      // ✅ ADDED: Deserialize from JSON
+      content: json['content'] as String?,
     );
   }
 
-  /// Converts this [ArticleModel] instance into a JSON map.
-  /// This is used when saving article metadata to Firestore.
   Map<String, dynamic> toJson() {
     return {
       'title': title,
@@ -50,11 +46,12 @@ class ArticleModel {
       'imageUrl': imageUrl,
       'readingTimeMinutes': readingTimeMinutes,
       'author': author,
-      'publishedAt': publishedAt != null ? Timestamp.fromDate(publishedAt!) : FieldValue.serverTimestamp(), // Use serverTimestamp for new docs
+      'publishedAt': publishedAt != null ? Timestamp.fromDate(publishedAt!) : FieldValue.serverTimestamp(),
+      // ✅ ADDED: Serialize to JSON
+      'content': content,
     };
   }
 
-  /// Creates a copy of this ArticleModel with updated values.
   ArticleModel copyWith({
     String? id,
     String? title,
@@ -63,6 +60,8 @@ class ArticleModel {
     int? readingTimeMinutes,
     String? author,
     DateTime? publishedAt,
+    // ✅ ADDED: Include in copyWith
+    String? content,
   }) {
     return ArticleModel(
       id: id ?? this.id,
@@ -72,6 +71,8 @@ class ArticleModel {
       readingTimeMinutes: readingTimeMinutes ?? this.readingTimeMinutes,
       author: author ?? this.author,
       publishedAt: publishedAt ?? this.publishedAt,
+      // ✅ ADDED: Handle in copyWith
+      content: content ?? this.content,
     );
   }
 

@@ -1,6 +1,5 @@
 // lib/core/models/meditation_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
 class MeditationModel {
   final String? id;
@@ -13,6 +12,7 @@ class MeditationModel {
   final DateTime? createdAt;
   final String voiceType;
   final int playCount;
+  final String? localAudioPath; // New field for the local audio file
 
   MeditationModel({
     this.id,
@@ -25,6 +25,7 @@ class MeditationModel {
     this.createdAt,
     this.voiceType = 'Female',
     this.playCount = 0,
+    this.localAudioPath, // Added to constructor
   });
 
   // ✅ FIX: Added fallback values for all required fields to prevent crashes from null data.
@@ -32,7 +33,8 @@ class MeditationModel {
     return MeditationModel(
       id: docId,
       title: json['title'] as String? ?? 'Untitled Meditation',
-      description: json['description'] as String? ?? 'No description available.',
+      description:
+      json['description'] as String? ?? 'No description available.',
       category: json['category'] as String? ?? 'General',
       durationMinutes: json['durationMinutes'] as int? ?? 0,
       audioFilePath: json['audioFilePath'] as String?,
@@ -51,7 +53,9 @@ class MeditationModel {
       'durationMinutes': durationMinutes,
       'audioFilePath': audioFilePath,
       'imageUrl': imageUrl,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
       'voiceType': voiceType,
       'playCount': playCount,
     };
@@ -68,6 +72,7 @@ class MeditationModel {
     DateTime? createdAt,
     String? voiceType,
     int? playCount,
+    String? localAudioPath,
   }) {
     return MeditationModel(
       id: id ?? this.id,
@@ -80,6 +85,7 @@ class MeditationModel {
       createdAt: createdAt ?? this.createdAt,
       voiceType: voiceType ?? this.voiceType,
       playCount: playCount ?? this.playCount,
+      localAudioPath: localAudioPath ?? this.localAudioPath,
     );
   }
 

@@ -11,78 +11,10 @@ import 'package:dhyana/providers/meditation_provider.dart';
 import 'package:dhyana/providers/progress_provider.dart';
 import 'package:dhyana/providers/auth_provider.dart';
 import 'package:dhyana/models/meditation_model.dart';
-import 'package:dhyana/models/progress_data_model.dart';
 import 'package:dhyana/widgets/common/app_bar_widget.dart';
 import 'package:dhyana/widgets/common/loading_widget.dart';
-import 'package:dhyana/widgets/common/custom_button.dart';
 
-// ✅ ADD: A new screen for when the session is complete.
-class SessionCompleteScreen extends StatelessWidget {
-  final MeditationModel meditation;
-  const SessionCompleteScreen({required this.meditation, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: CustomAppBar(
-        title: 'Session Complete',
-        showBackButton: false,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDarkMode
-                ? [AppColors.backgroundDark, const Color(0xFF2C2C2C)]
-                : [AppColors.backgroundLight, const Color(0xFFF0F0F0)],
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppConstants.paddingLarge),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle_outline, color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue, size: 80),
-                const SizedBox(height: AppConstants.paddingMedium),
-                Text('Well done!', style: AppTextStyles.headlineMedium.copyWith(color: isDarkMode ? AppColors.textDark : AppColors.textLight)),
-                const SizedBox(height: AppConstants.paddingSmall),
-                Text(
-                  'You have completed the ${meditation.title} meditation.',
-                  style: AppTextStyles.bodyLarge.copyWith(color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.8)),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.paddingLarge * 2),
-                CustomButton(
-                  text: 'Add a Journal Entry',
-                  onPressed: () {
-                    // Use push so the user can come back
-                    context.push('/journal-entry');
-                  },
-                  type: ButtonType.primary,
-                  icon: Icons.edit_outlined,
-                ),
-                const SizedBox(height: AppConstants.paddingMedium),
-                CustomButton(
-                  text: 'Back to Meditations',
-                  onPressed: () {
-                    // Use go to replace the stack and go back to the list
-                    context.go('/meditations');
-                  },
-                  type: ButtonType.outline,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ✅ The SessionCompleteScreen class that was here has been removed to resolve the error.
 
 class MeditationPlayerScreen extends ConsumerStatefulWidget {
   final String? meditationId;
@@ -138,15 +70,8 @@ class _MeditationPlayerScreenState extends ConsumerState<MeditationPlayerScreen>
     if (currentUser == null) return;
 
     final progressNotifier = ref.read(progressNotifierProvider.notifier);
-    final currentProgress = await ref.read(userProgressDataProvider(currentUser.uid).future);
 
-    final updatedProgress = (currentProgress ?? ProgressDataModel(userId: currentUser.uid)).copyWith(
-      totalMeditationMinutes: (currentProgress?.totalMeditationMinutes ?? 0) + meditation.durationMinutes,
-      meditationStreak: (currentProgress?.meditationStreak ?? 0) + 1,
-      lastUpdated: DateTime.now(),
-    );
-
-    await progressNotifier.saveProgressData(currentUser.uid, updatedProgress);
+    await progressNotifier.logBreathingSession(currentUser.uid, meditation.durationMinutes);
   }
 
   @override
@@ -160,7 +85,7 @@ class _MeditationPlayerScreenState extends ConsumerState<MeditationPlayerScreen>
     final duration = ref.watch(currentMeditationDurationProvider).value ?? Duration.zero;
 
     return Scaffold(
-      appBar: CustomAppBar(title: 'Meditation Player', showBackButton: true),
+      appBar: const CustomAppBar(title: 'Meditation Player', showBackButton: true),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -193,13 +118,13 @@ class _MeditationPlayerScreenState extends ConsumerState<MeditationPlayerScreen>
                               : null,
                         ),
                         child: (meditation.imageUrl == null || meditation.imageUrl!.isEmpty)
-                            ? Center(child: Icon(Icons.self_improvement, size: 80, color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.5)))
+                            ? Center(child: Icon(Icons.self_improvement, size: 80, color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withAlpha(128)))
                             : null,
                       ),
                       const SizedBox(height: AppConstants.paddingLarge),
-                      Text(meditation.title, style: AppTextStyles.headlineLarge.copyWith(color: isDarkMode ? AppColors.textDark : AppColors.textLight), textAlign: TextAlign.center),
+                      Text(meditation.title, style: AppTextStyles.headlineLarge, textAlign: TextAlign.center),
                       const SizedBox(height: AppConstants.paddingSmall),
-                      Text('${meditation.durationMinutes} minutes • ${meditation.category}', style: AppTextStyles.titleMedium.copyWith(color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7))),
+                      Text('${meditation.durationMinutes} minutes • ${meditation.category}', style: AppTextStyles.titleMedium.copyWith(color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withAlpha(179))),
                     ],
                   ),
                   Padding(
@@ -223,14 +148,13 @@ class _MeditationPlayerScreenState extends ConsumerState<MeditationPlayerScreen>
                         playerState.when(
                           data: (state) => IconButton(
                             iconSize: 72,
-                            color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
+                            color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryPurple,
                             icon: Icon(state == PlayerState.playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
                             onPressed: () {
                               final notifier = ref.read(meditationPlayerProvider.notifier);
                               if (state == PlayerState.playing) {
                                 notifier.pauseMeditation();
                               } else {
-                                // ✅ FIX: Pass the full meditation object.
                                 notifier.playMeditation(meditation);
                               }
                             },

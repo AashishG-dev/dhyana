@@ -1,6 +1,5 @@
-// lib/core/models/user_model.dart
+// lib/models/user_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
 class UserModel {
   final String? id;
@@ -11,6 +10,10 @@ class UserModel {
   final DateTime? createdAt;
   final DateTime? lastLoginAt;
   final List<String> favoriteMeditationIds;
+  final String role;
+  final List<String> completedTaskIds;
+  final List<String> preferredActivities;
+  final String? currentMood;
 
   UserModel({
     this.id,
@@ -21,6 +24,10 @@ class UserModel {
     this.createdAt,
     this.lastLoginAt,
     this.favoriteMeditationIds = const [],
+    this.role = 'user',
+    this.completedTaskIds = const [],
+    this.preferredActivities = const [],
+    this.currentMood,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -29,10 +36,26 @@ class UserModel {
       email: json['email'] as String,
       name: json['name'] as String,
       profilePictureUrl: json['profilePictureUrl'] as String?,
-      meditationGoals: (json['meditationGoals'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+      meditationGoals: (json['meditationGoals'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+          const [],
       createdAt: (json['createdAt'] as Timestamp?)?.toDate(),
       lastLoginAt: (json['lastLoginAt'] as Timestamp?)?.toDate(),
-      favoriteMeditationIds: (json['favoriteMeditationIds'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+      favoriteMeditationIds: (json['favoriteMeditationIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+          const [],
+      role: json['role'] as String? ?? 'user',
+      completedTaskIds: (json['completedTaskIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+          const [],
+      preferredActivities: (json['preferredActivities'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+          const [],
+      currentMood: json['currentMood'] as String?,
     );
   }
 
@@ -44,8 +67,13 @@ class UserModel {
       'profilePictureUrl': profilePictureUrl,
       'meditationGoals': meditationGoals,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
-      'lastLoginAt': lastLoginAt != null ? Timestamp.fromDate(lastLoginAt!) : null,
+      'lastLoginAt':
+      lastLoginAt != null ? Timestamp.fromDate(lastLoginAt!) : null,
       'favoriteMeditationIds': favoriteMeditationIds,
+      'role': role,
+      'completedTaskIds': completedTaskIds,
+      'preferredActivities': preferredActivities,
+      'currentMood': currentMood,
     };
   }
 
@@ -58,6 +86,10 @@ class UserModel {
     DateTime? createdAt,
     DateTime? lastLoginAt,
     List<String>? favoriteMeditationIds,
+    String? role,
+    List<String>? completedTaskIds,
+    List<String>? preferredActivities,
+    String? currentMood,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -67,12 +99,17 @@ class UserModel {
       meditationGoals: meditationGoals ?? this.meditationGoals,
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
-      favoriteMeditationIds: favoriteMeditationIds ?? this.favoriteMeditationIds,
+      favoriteMeditationIds:
+      favoriteMeditationIds ?? this.favoriteMeditationIds,
+      role: role ?? this.role,
+      completedTaskIds: completedTaskIds ?? this.completedTaskIds,
+      preferredActivities: preferredActivities ?? this.preferredActivities,
+      currentMood: currentMood ?? this.currentMood,
     );
   }
 
   @override
   String toString() {
-    return 'UserModel(id: $id, name: $name, favoriteMeditations: ${favoriteMeditationIds.length})';
+    return 'UserModel(id: $id, name: $name, role: $role, favoriteMeditations: ${favoriteMeditationIds.length})';
   }
 }

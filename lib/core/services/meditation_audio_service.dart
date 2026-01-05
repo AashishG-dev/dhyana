@@ -1,71 +1,75 @@
 // lib/core/services/meditation_audio_service.dart
+import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dhyana/core/utils/audio_utils.dart';
 import 'package:dhyana/core/services/cloudinary_service.dart';
 import 'package:dhyana/models/meditation_model.dart';
 
-/// Manages meditation audio assets, including loading, caching, and providing paths.
 class MeditationAudioService {
   final CloudinaryService _cloudinaryService;
-  MeditationAudioService(this._cloudinaryService);
+  late final AudioPlayer _audioPlayer;
+
+  MeditationAudioService(this._cloudinaryService) {
+    // Create a dedicated player instance for meditations
+    _audioPlayer = AudioUtils.createPlayer();
+    // Meditations can also benefit from this mode
+    _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
+  }
 
   final Map<String, String> _meditationAudioCache = {};
 
-  /// Builds a playable audio URL from a meditation model's public ID.
   String? getAudioUrl(MeditationModel meditation) {
+    // Prioritize local path if it exists
+    if (meditation.localAudioPath != null &&
+        meditation.localAudioPath!.isNotEmpty) {
+      if (File(meditation.localAudioPath!).existsSync()) {
+        return meditation.localAudioPath;
+      }
+    }
+
     final meditationId = meditation.id;
     if (meditationId == null) return null;
 
-    // Check cache first
     if (_meditationAudioCache.containsKey(meditationId)) {
       return _meditationAudioCache[meditationId];
     }
 
-    // If not in cache, build it from the model's audioFilePath (which is the Public ID)
     final publicId = meditation.audioFilePath;
     if (publicId != null && publicId.isNotEmpty) {
       final String audioUrl = CloudinaryService.buildCloudinaryUrl(
         publicId: publicId,
-        resourceType: CloudinaryResourceType.video, // Audio is stored as a video resource type in Cloudinary
+        resourceType: CloudinaryResourceType.video,
       );
-      // Cache the URL for next time
       _meditationAudioCache[meditationId] = audioUrl;
       return audioUrl;
     }
     return null;
   }
 
-  /// Plays a meditation audio from a MeditationModel.
   Future<bool> playMeditation(MeditationModel meditation) async {
     final String? audioUrl = getAudioUrl(meditation);
     if (audioUrl != null) {
-      return await AudioUtils.playAudio(audioUrl);
+      // Check if the URL is a local file path or a network URL
+      final bool isLocal = !audioUrl.startsWith('http');
+      await _audioPlayer.play(isLocal ? DeviceFileSource(audioUrl) : UrlSource(audioUrl));
+      return true;
     }
-    debugPrint('Cannot play meditation: audio URL not found for ${meditation.id}');
+    debugPrint(
+        'Cannot play meditation: audio URL not found for ${meditation.id}');
     return false;
   }
 
-  Future<void> pauseMeditation() async {
-    await AudioUtils.pauseAudio();
-  }
+  Future<void> pauseMeditation() async => await _audioPlayer.pause();
+  Future<void> resumeMeditation() async => await _audioPlayer.resume();
+  Future<void> stopMeditation() async => await _audioPlayer.stop();
+  Future<void> dispose() async => await _audioPlayer.dispose();
+  Future<void> seek(Duration position) async =>
+      await _audioPlayer.seek(position);
 
-  Future<void> resumeMeditation() async {
-    await AudioUtils.resumeAudio();
-  }
-
-  Future<void> stopMeditation() async {
-    await AudioUtils.stopAudio();
-  }
-
-  Future<void> dispose() async {
-    await AudioUtils.disposeAudioPlayer();
-  }
-
-  // Expose streams from AudioUtils for UI to listen to
-  Stream<PlayerState> get onPlayerStateChanged => AudioUtils.onPlayerStateChanged;
-  Stream<Duration> get onPositionChanged => AudioUtils.onPositionChanged;
-  Stream<Duration> get onDurationChanged => AudioUtils.onDurationChanged;
-  Stream<void> get onPlayerComplete => AudioUtils.onPlayerComplete;
-  Future<void> seek(Duration position) => AudioUtils.seek(position);
+  Stream<PlayerState> get onPlayerStateChanged =>
+      _audioPlayer.onPlayerStateChanged;
+  Stream<Duration> get onPositionChanged => _audioPlayer.onPositionChanged;
+  Stream<Duration> get onDurationChanged => _audioPlayer.onDurationChanged;
+  Stream<void> get onPlayerComplete => _audioPlayer.onPlayerComplete;
 }

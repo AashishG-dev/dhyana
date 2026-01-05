@@ -1,20 +1,16 @@
 // lib/screens/meditation/meditation_list_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/providers/meditation_provider.dart'; // For meditationsProvider
-import 'package:dhyana/models/meditation_model.dart';
+import 'package:dhyana/providers/meditation_provider.dart';
 import 'package:dhyana/widgets/common/app_bar_widget.dart';
 import 'package:dhyana/widgets/common/bottom_nav_bar.dart';
 import 'package:dhyana/widgets/common/loading_widget.dart';
-// ✅ ADD: Import the new category row widget
 import 'package:dhyana/widgets/cards/meditation_category_row.dart';
 
-/// A screen that displays a list of available guided meditation sessions, grouped by category.
 class MeditationListScreen extends ConsumerWidget {
   const MeditationListScreen({super.key});
 
@@ -23,13 +19,12 @@ class MeditationListScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    // ✅ FIX: The provider now returns a Map
     final meditationsAsync = ref.watch(meditationsProvider);
 
     return Scaffold(
-      appBar: CustomAppBar(
-        title: 'Meditate', // Changed title to be more engaging
-        showBackButton: false, // This is a main screen, so no back button needed
+      appBar: const CustomAppBar(
+        title: 'Meditate',
+        showBackButton: false,
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -41,23 +36,19 @@ class MeditationListScreen extends ConsumerWidget {
                 : [AppColors.backgroundLight, const Color(0xFFF0F0F0)],
           ),
         ),
-        // ✅ FIX: Replaced the Column with a direct consumer of the provider
         child: meditationsAsync.when(
           data: (groupedMeditations) {
             if (groupedMeditations.isEmpty) {
               return Center(
                 child: Text(
                   'No meditations available at the moment.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                  ),
+                  style: AppTextStyles.bodyMedium,
                 ),
               );
             }
 
             final categories = groupedMeditations.keys.toList();
 
-            // Use a ListView to display the category rows vertically
             return ListView.builder(
               padding: const EdgeInsets.only(top: AppConstants.paddingLarge),
               itemCount: categories.length,
@@ -74,11 +65,11 @@ class MeditationListScreen extends ConsumerWidget {
           loading: () => const LoadingWidget(message: 'Loading meditations...'),
           error: (e, st) => Center(
             child: Text('Error loading meditations: $e',
-                style: TextStyle(color: AppColors.errorColor)),
+                style: const TextStyle(color: AppColors.errorColor)),
           ),
         ),
       ),
-      bottomNavigationBar: const CustomBottomNavBar(currentIndex: 1), // Highlight Meditate tab
+      bottomNavigationBar: const CustomBottomNavBar(currentIndex: 2),
     );
   }
 }

@@ -1,57 +1,24 @@
 // lib/screens/settings/settings_screen.dart
+import 'package:dhyana/providers/onboarding_provider.dart';
+import 'package:dhyana/widgets/common/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
 import 'package:dhyana/core/constants/app_colors.dart';
 import 'package:dhyana/core/constants/app_text_styles.dart';
 import 'package:dhyana/core/constants/app_constants.dart';
-import 'package:dhyana/providers/auth_provider.dart'; // For authService
-import 'package:dhyana/providers/theme_provider.dart'; // For themeProvider
-import 'package:dhyana/providers/notification_provider.dart'; // For notificationSettingsProvider
-import 'package:dhyana/core/utils/helpers.dart'; // For showing snackbar/dialogs
+import 'package:dhyana/providers/auth_provider.dart';
+import 'package:dhyana/providers/theme_provider.dart';
+import 'package:dhyana/core/utils/helpers.dart';
 import 'package:dhyana/widgets/common/app_bar_widget.dart';
 import 'package:dhyana/widgets/common/custom_button.dart';
-import 'package:dhyana/widgets/common/loading_widget.dart';
+import 'package:dhyana/providers/user_profile_provider.dart';
 
-/// A screen for managing application settings, including:
-/// - Theme selection (light/dark/system).
-/// - Notification settings (meditation reminders, mindful moments).
-/// - Account management (logout).
-/// It integrates with `ThemeProvider`, `NotificationSettingsNotifier`,
-/// and `AuthService` via Riverpod.
-class SettingsScreen extends ConsumerStatefulWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  TimeOfDay? _selectedReminderTime;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadInitialReminderTime();
-  }
-
-  /// Loads the initial meditation reminder time from storage or default.
-  Future<void> _loadInitialReminderTime() async {
-    // In a real app, you'd fetch this from StorageService.
-    // For now, let's assume a default or load from a placeholder.
-    // Example: final storedTime = ref.read(storageServiceProvider).getString(AppConstants.meditationReminderTimeKey);
-    // if (storedTime != null) {
-    //   final parts = storedTime.split(':');
-    //   _selectedReminderTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-    // } else {
-    //   _selectedReminderTime = const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
-    // }
-    _selectedReminderTime = const TimeOfDay(hour: 20, minute: 0); // Default 8 PM
-  }
-
-  /// Handles user logout.
-  Future<void> _handleLogout() async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    if (!context.mounted) return;
     final bool? confirm = await Helpers.showConfirmationDialog(
       context,
       title: 'Logout',
@@ -60,16 +27,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       cancelText: 'Cancel',
     );
 
-    if (confirm == true) {
+    if (confirm == true && context.mounted) {
       try {
+        // ✅ ADDED: This tells the router that a logout has occurred
+        // so it can redirect to the welcome screen properly.
+        await ref.read(onboardingNotifierProvider.notifier).handleLogoutRedirect();
         await ref.read(authServiceProvider).logout();
-        if (mounted) {
-          context.go('/'); // Redirect to welcome/login screen
-          Helpers.showSnackbar(context, 'Logged out successfully!');
-        }
+
       } catch (e) {
         debugPrint('Logout Error: $e');
-        if (mounted) {
+        if (context.mounted) {
           Helpers.showMessageDialog(
             context,
             title: 'Logout Failed',
@@ -80,262 +47,230 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  /// Shows a time picker for setting meditation reminder time.
-  Future<void> _pickTime(BuildContext context) async {
-    final TimeOfDay? newTime = await showTimePicker(
-      context: context,
-      initialTime: _selectedReminderTime ?? TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme, // Use app's color scheme
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.primary, // Button text color
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
+  Future<void> _handleDeleteData(BuildContext context, WidgetRef ref) async {
+    final user = ref.read(currentUserProfileProvider).value;
+    if (user?.id == null) return;
+
+    final bool? confirm = await Helpers.showConfirmationDialog(
+      context,
+      title: 'Delete All My Data',
+      message:
+      'This action is irreversible and will permanently delete all your journal entries, progress, and preferences. Are you sure you want to continue?',
+      confirmText: 'Yes, Delete Everything',
+      cancelText: 'Cancel',
     );
 
-    if (newTime != null) {
-      setState(() {
-        _selectedReminderTime = newTime;
-      });
-      // If reminder is already enabled, update its schedule
-      final notificationNotifier = ref.read(notificationSettingsProvider.notifier);
-      final isReminderEnabled = ref.read(notificationSettingsProvider);
-      if (isReminderEnabled) {
-        await notificationNotifier.toggleMeditationReminder(true, time: newTime);
+    if (confirm == true && context.mounted) {
+      try {
+        await ref
+            .read(userProfileNotifierProvider.notifier)
+            .deleteUserData(user!.id!);
+        if (context.mounted) {
+          Helpers.showSnackbar(
+              context, 'Your data has been successfully deleted.');
+          context.go('/welcome');
+        }
+      } catch (e) {
+        debugPrint('Delete Data Error: $e');
+        if (context.mounted) {
+          Helpers.showMessageDialog(
+            context,
+            title: 'Deletion Failed',
+            message:
+            'An error occurred while deleting your data. Please try again.',
+          );
+        }
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    // Watch theme mode and notification reminder status
-    final themeMode = ref.watch(themeProvider);
-    final isMeditationReminderEnabled = ref.watch(notificationSettingsProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final themeModeAsync = ref.watch(themeProvider);
+    final user = ref.watch(currentUserProfileProvider).value;
 
     return Scaffold(
-      appBar: CustomAppBar(
+      appBar: const CustomAppBar(
         title: 'Settings',
         showBackButton: true,
       ),
-      body: Container(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDarkMode
+                    ? [AppColors.backgroundDark, const Color(0xFF212121)]
+                    : [AppColors.backgroundLight, const Color(0xFFEEEEEE)],
+              ),
+            ),
+            child: ListView(
+              padding: const EdgeInsets.all(AppConstants.paddingMedium),
+              children: [
+                _buildSettingsCard(
+                  context,
+                  title: 'App Theme',
+                  child: themeModeAsync.when(
+                    data: (themeMode) => Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildThemeChoice(
+                          context: context,
+                          icon: Icons.wb_sunny_outlined,
+                          label: 'Light',
+                          isSelected: themeMode == ThemeMode.light,
+                          onTap: () => ref
+                              .read(themeProvider.notifier)
+                              .setThemeMode(ThemeMode.light),
+                        ),
+                        _buildThemeChoice(
+                          context: context,
+                          icon: Icons.nightlight_outlined,
+                          label: 'Dark',
+                          isSelected: themeMode == ThemeMode.dark,
+                          onTap: () => ref
+                              .read(themeProvider.notifier)
+                              .setThemeMode(ThemeMode.dark),
+                        ),
+                        _buildThemeChoice(
+                          context: context,
+                          icon: Icons.settings_system_daydream_outlined,
+                          label: 'System',
+                          isSelected: themeMode == ThemeMode.system,
+                          onTap: () => ref
+                              .read(themeProvider.notifier)
+                              .setThemeMode(ThemeMode.system),
+                        ),
+                      ],
+                    ),
+                    loading: () => const LoadingWidget(),
+                    error: (err, stack) =>
+                    const Text('Error loading theme settings.'),
+                  ),
+                ),
+                _buildSettingsCard(
+                  context,
+                  title: 'Notifications',
+                  child: ListTile(
+                    leading: const Icon(Icons.notifications_active_outlined),
+                    title: const Text('Reminder Settings'),
+                    subtitle: const Text('Set daily reminders for meditation'),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () => context.push('/notification-settings'),
+                  ),
+                ),
+                if (user?.id != null)
+                  _buildSettingsCard(
+                    context,
+                    title: 'Manage Data',
+                    child: Column(
+                      children: [
+                        CustomButton(
+                          text: 'Update Preferences',
+                          onPressed: () => context.push('/preferences'),
+                          type: ButtonType.secondary,
+                          icon: Icons.tune,
+                        ),
+                        const SizedBox(height: 16.0),
+                        CustomButton(
+                          text: 'Delete My Data',
+                          onPressed: () => _handleDeleteData(context, ref),
+                          type: ButtonType.secondary,
+                          icon: Icons.delete_forever,
+                        ),
+                      ],
+                    ),
+                  ),
+                _buildSettingsCard(
+                  context,
+                  title: 'Account',
+                  child: Center(
+                    child: CustomButton(
+                      text: 'Logout',
+                      onPressed: () => _handleLogout(context, ref),
+                      type: ButtonType.secondary,
+                      icon: Icons.logout,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: IgnorePointer(
+                child: Text(
+                  'Developed by Aashish',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.withOpacity(0.5),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard(BuildContext context,
+      {required String title, required Widget child}) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppConstants.marginMedium),
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.paddingMedium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: AppTextStyles.titleLarge),
+            const SizedBox(height: AppConstants.paddingMedium),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemeChoice({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final color =
+    isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryPurple;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDarkMode
-                ? [AppColors.backgroundDark, const Color(0xFF212121)]
-                : [AppColors.backgroundLight, const Color(0xFFEEEEEE)],
+          color: isSelected ? color.withAlpha(38) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.withAlpha(77),
+            width: 1.5,
           ),
         ),
-        child: ListView(
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
+        child: Column(
           children: [
-            // --- Theme Settings ---
-            Card(
-              margin: const EdgeInsets.only(bottom: AppConstants.marginMedium),
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'App Theme',
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    ListTile(
-                      title: Text(
-                        'Light Mode',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      trailing: Radio<ThemeMode>(
-                        value: ThemeMode.light,
-                        groupValue: themeMode,
-                        onChanged: (ThemeMode? value) {
-                          if (value != null) {
-                            ref.read(themeProvider.notifier).setLightMode();
-                          }
-                        },
-                        activeColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                      ),
-                    ),
-                    ListTile(
-                      title: Text(
-                        'Dark Mode',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      trailing: Radio<ThemeMode>(
-                        value: ThemeMode.dark,
-                        groupValue: themeMode,
-                        onChanged: (ThemeMode? value) {
-                          if (value != null) {
-                            ref.read(themeProvider.notifier).setDarkMode();
-                          }
-                        },
-                        activeColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                      ),
-                    ),
-                    ListTile(
-                      title: Text(
-                        'System Default',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      trailing: Radio<ThemeMode>(
-                        value: ThemeMode.system,
-                        groupValue: themeMode,
-                        onChanged: (ThemeMode? value) {
-                          if (value != null) {
-                            ref.read(themeProvider.notifier).setSystemMode();
-                          }
-                        },
-                        activeColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // --- Notification Settings ---
-            Card(
-              margin: const EdgeInsets.only(bottom: AppConstants.marginMedium),
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    SwitchListTile(
-                      title: Text(
-                        'Meditation Reminders',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      value: isMeditationReminderEnabled,
-                      onChanged: (bool value) async {
-                        final notificationNotifier = ref.read(notificationSettingsProvider.notifier);
-                        if (value) {
-                          // If enabling, ensure a time is selected
-                          if (_selectedReminderTime == null) {
-                            await _pickTime(context); // Force user to pick time
-                          }
-                          if (_selectedReminderTime != null) {
-                            await notificationNotifier.toggleMeditationReminder(true, time: _selectedReminderTime);
-                            if (context.mounted) Helpers.showSnackbar(context, 'Meditation reminders enabled.');
-                          } else {
-                            if (context.mounted) Helpers.showSnackbar(context, 'Please select a reminder time.', backgroundColor: AppColors.warningColor);
-                          }
-                        } else {
-                          await notificationNotifier.toggleMeditationReminder(false);
-                          if (context.mounted) Helpers.showSnackbar(context, 'Meditation reminders disabled.');
-                        }
-                      },
-                      activeColor: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue,
-                    ),
-                    if (isMeditationReminderEnabled)
-                      ListTile(
-                        title: Text(
-                          'Reminder Time',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                          ),
-                        ),
-                        subtitle: Text(
-                          _selectedReminderTime?.format(context) ?? 'Not set',
-                          style: AppTextStyles.labelLarge.copyWith(
-                            color: (isDarkMode ? AppColors.textDark : AppColors.textLight).withOpacity(0.7),
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.access_time, color: isDarkMode ? AppColors.primaryLightGreen : AppColors.primaryLightBlue),
-                          onPressed: () => _pickTime(context),
-                        ),
-                      ),
-                    // You can add more notification settings here, e.g., for mindful moments
-                    ListTile(
-                      title: Text(
-                        'Request Permissions',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                        ),
-                      ),
-                      trailing: CustomButton(
-                        text: 'Grant',
-                        onPressed: () async {
-                          final notificationNotifier = ref.read(notificationSettingsProvider.notifier);
-                          final granted = await notificationNotifier.requestNotificationPermissions();
-                          if (context.mounted) {
-                            if (granted) {
-                              Helpers.showSnackbar(context, 'Notification permissions granted!');
-                            } else {
-                              Helpers.showMessageDialog(
-                                context,
-                                title: 'Permissions Denied',
-                                message: 'Notification permissions were denied. Please enable them in your device settings.',
-                              );
-                            }
-                          }
-                        },
-                        type: ButtonType.outline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // --- Account Settings ---
-            Card(
-              margin: const EdgeInsets.only(bottom: AppConstants.marginMedium),
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Account',
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: isDarkMode ? AppColors.textDark : AppColors.textLight,
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.paddingMedium),
-                    Center(
-                      child: CustomButton(
-                        text: 'Logout',
-                        onPressed: _handleLogout,
-                        type: ButtonType.secondary,
-                        icon: Icons.logout,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            Icon(icon, color: isSelected ? color : Colors.grey),
+            const SizedBox(height: 8),
+            Text(label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: isSelected ? color : null,
+                )),
           ],
         ),
       ),

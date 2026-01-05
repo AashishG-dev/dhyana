@@ -4,70 +4,111 @@ import 'package:dhyana/core/services/api_service.dart'; // For making API calls
 import 'package:dhyana/models/chat_message_model.dart'; // For ChatMessageModel
 import 'package:dhyana/core/constants/app_constants.dart'; // For Gemini API key
 
-/// Manages interaction with the AI-powered chatbot, specifically
-/// integrating with the Gemini API. This service handles sending
-/// messages to the chatbot and processing its responses.
 class ChatbotService {
   final ApiService _apiService;
 
   ChatbotService(this._apiService);
 
-  // The Gemini model to use. 'gemini-pro' is a common choice for text generation.
-  static const String _geminiModel = 'gemini-2.0-flash';
+  static const String _geminiModel = 'gemini-2.5-flash';
 
-  /// Sends a message to the Gemini chatbot and retrieves its response.
-  ///
-  /// [message]: The user's message to send to the chatbot.
-  /// [chatHistory]: A list of previous chat messages to provide context to the AI.
-  ///
-  /// Returns the chatbot's response as a [ChatMessageModel].
-  /// Throws an [Exception] if the API call fails.
+  // System prompt to define the chatbot's personality and role
+  static const String _systemPrompt = '''
+You are Dhyana, a compassionate and empathetic AI wellness companion specializing in stress relief and mental health support. Your primary role is to help users manage stress, anxiety, and emotional challenges. You can also answer general questions and provide information. If asked to generate code, you must format it within proper markdown code blocks.
+
+**Core Principles:**
+- Always respond with empathy, warmth, and understanding
+- Provide practical stress relief techniques and coping strategies
+- Encourage mindfulness, meditation, and self-care practices
+- Offer emotional validation and support without judgment
+- Suggest healthy lifestyle changes and wellness tips
+- Know when to recommend professional help for serious issues
+
+**Communication Style:**
+- Use a gentle, caring, and non-judgmental tone
+- Use markdown for formatting (bolding, lists, etc.) to improve readability.
+- Keep responses concise but meaningful (2-4 sentences typically)
+- Include relevant emojis to convey warmth (🌸, 💚, 🧘‍♀️, ✨, 🌿)
+- Ask follow-up questions to better understand the user's needs
+
+**Important Guidelines:**
+- **You must always respond in English**, unless the user explicitly asks you to use a different language.
+- Never provide medical diagnosis or replace professional therapy
+- Always encourage seeking professional help for serious mental health concerns
+- If a user mentions self-harm or crisis, immediately provide crisis resources.
+''';
+
   Future<ChatMessageModel> sendMessageToChatbot(
       String message, List<ChatMessageModel> chatHistory) async {
     try {
-      // Construct the chat history in the format expected by the Gemini API.
-      // The Gemini API expects a list of 'contents', where each content
-      // has a 'role' (user/model) and 'parts' (text).
-      final List<Map<String, dynamic>> contents = chatHistory.map((msg) {
-        return {
-          'role': msg.sender == MessageSender.user ? 'user' : 'model',
-          'parts': [
-            {'text': msg.text}
-          ],
-        };
-      }).toList();
+      final List<Map<String, dynamic>> contents = [];
 
-      // Add the current user's message to the contents.
-      contents.add({
+      if (chatHistory.isEmpty ||
+          !chatHistory.any((msg) => msg.sender == MessageSender.chatbot &&
+              msg.text.contains('Dhyana'))) {
+        contents.add(<String, dynamic>{
+          'role': 'user',
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{'text': _systemPrompt}
+          ],
+        });
+        contents.add(<String, dynamic>{
+          'role': 'model',
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{'text': 'I understand. I am Dhyana, your compassionate AI wellness companion, ready to support you with stress relief and emotional wellbeing. How are you feeling today? 🌸'}
+          ],
+        });
+      }
+
+      for (final msg in chatHistory) {
+        if (msg.sender == MessageSender.chatbot &&
+            msg.text.contains('👋 Hello! I\'m Dhyana')) {
+          continue;
+        }
+
+        contents.add(<String, dynamic>{
+          'role': msg.sender == MessageSender.user ? 'user' : 'model',
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{'text': msg.text}
+          ],
+        });
+      }
+
+      contents.add(<String, dynamic>{
         'role': 'user',
-        'parts': [
-          {'text': message}
+        'parts': <Map<String, dynamic>>[
+          <String, dynamic>{'text': message}
         ],
       });
 
-      // Construct the payload for the Gemini API request.
-      final Map<String, dynamic> payload = {
+      final Map<String, dynamic> payload = <String, dynamic>{
         'contents': contents,
-        // Optional: Add generationConfig for controlling response generation
-        // 'generationConfig': {
-        //   'temperature': 0.7, // Controls randomness of response
-        //   'topP': 0.95,       // Controls diversity of response
-        //   'topK': 40,         // Controls diversity of response
-        // },
+        'generationConfig': <String, dynamic>{
+          'temperature': 0.8,
+          'topP': 0.95,
+          'topK': 40,
+          'maxOutputTokens': 2048,
+        },
+        'safetySettings': [
+          {'category': 'HARM_CATEGORY_HARASSMENT', 'threshold': 'BLOCK_MEDIUM_AND_ABOVE'},
+          {'category': 'HARM_CATEGORY_HATE_SPEECH', 'threshold': 'BLOCK_MEDIUM_AND_ABOVE'},
+          {'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'threshold': 'BLOCK_MEDIUM_AND_ABOVE'},
+          {'category': 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold': 'BLOCK_MEDIUM_AND_ABOVE'}
+        ],
       };
 
-      // Construct the API URL, including the API key.
-      // The API key is appended as a query parameter.
-      final String apiUrlPath =
-          'v1beta/models/$_geminiModel:generateContent?key=${AppConstants.geminiApiKey}';
+      final String apiUrlPath = 'v1beta/models/$_geminiModel:generateContent';
 
-      debugPrint('Sending message to Gemini API: $message');
+      debugPrint('Sending message to Dhyana AI: $message');
 
-      // Make the POST request to the Gemini API.
-      final Map<String, dynamic> response =
-      await _apiService.post(apiUrlPath, payload, baseUrl: AppConstants.geminiApiBaseUrl);
+      final Map<String, dynamic> response = await _apiService.post(
+        apiUrlPath,
+        payload,
+        baseUrl: AppConstants.geminiApiBaseUrl,
+        headers: <String, String>{
+          'x-goog-api-key': AppConstants.geminiApiKey,
+        },
+      );
 
-      // Parse the response from the Gemini API.
       if (response.containsKey('candidates') &&
           response['candidates'] is List &&
           response['candidates'].isNotEmpty) {
@@ -78,7 +119,7 @@ class ChatbotService {
             candidate['content']['parts'] is List &&
             candidate['content']['parts'].isNotEmpty) {
           final String chatbotResponseText = candidate['content']['parts'][0]['text'];
-          debugPrint('Received response from Gemini API: $chatbotResponseText');
+          debugPrint('Received response from Dhyana AI: $chatbotResponseText');
           return ChatMessageModel(
             text: chatbotResponseText,
             sender: MessageSender.chatbot,
@@ -86,24 +127,30 @@ class ChatbotService {
           );
         }
       }
-      // If the response structure is unexpected, throw an error.
+
       throw Exception('Invalid response format from Gemini API.');
     } catch (e) {
       debugPrint('Error sending message to chatbot: $e');
-      rethrow; // Re-throw the exception for higher-level error handling
+      rethrow;
     }
   }
 
-  /// Provides static crisis support resources.
-  /// This is a placeholder and could be expanded to fetch dynamic resources
-  /// from Firestore or another API.
   List<String> getCrisisSupportResources() {
     return [
-      'If you are in crisis, please reach out to a professional immediately.',
-      'National Suicide Prevention Lifeline: 988',
-      'Crisis Text Line: Text HOME to 741741',
-      'Emergency Services: Your local emergency number (e.g., 911 in the US)',
-      'Remember, you are not alone and help is available.',
+      '🚨 **IMMEDIATE CRISIS SUPPORT (India)** 🚨',
+      'If you are in immediate danger, please dial **112** for emergency services.',
+      '**24/7 Mental Health Helplines in India:**',
+      '• **KIRAN Mental Health Helpline (Govt. of India):** 1800-599-0019',
+      '• **Vandrevala Foundation Helpline:** 1860-266-2345 or 9999-666-555',
+      '• **AASRA (Suicide Prevention & Counselling):** +91-98204 66726',
+      '• **Snehi Helpline:** +91-95822 16811',
+      '**Remember:**',
+      '• You are not alone in this struggle 💚',
+      '• These feelings are temporary, even when they don\'t feel like it. 🌸',
+      '• Professional help is available and effective 🧘‍♀️',
+      '• Your life has value and meaning ✨',
+      'Please reach out to a mental health professional, trusted friend, or family member. You deserve support and care. 🌿'
     ];
   }
+
 }
